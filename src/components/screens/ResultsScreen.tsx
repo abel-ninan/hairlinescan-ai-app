@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Media } from "@capacitor-community/media";
+import { Capacitor } from "@capacitor/core";
 
 interface ResultsScreenProps {
   score: number;
@@ -75,13 +77,13 @@ const MetricRow = ({ label, value, delay = 0 }: MetricRowProps) => {
   );
 };
 
-// Hair care tips (general wellness, not medical)
+// Grooming tips (cosmetic/appearance focused)
 const hairCareTips = [
-  { name: "Gentle Shampoo", description: "Use sulfate-free products to reduce scalp irritation" },
-  { name: "Scalp Massage", description: "Regular massage may improve circulation" },
-  { name: "Balanced Diet", description: "Eat protein-rich foods and stay hydrated" },
-  { name: "Reduce Heat Styling", description: "Minimize heat damage from dryers and styling tools" },
-  { name: "Sun Protection", description: "Protect your scalp from sun exposure" },
+  { name: "Quality Products", description: "Sulfate-free shampoos can enhance natural shine and texture" },
+  { name: "Styling Technique", description: "Blow-drying with cool air can add volume and definition" },
+  { name: "Grooming Routine", description: "Regular trims every 4-6 weeks maintain a polished appearance" },
+  { name: "Product Application", description: "Apply styling products to damp hair for better distribution" },
+  { name: "Finishing Touch", description: "A light hold spray can keep your style in place all day" },
 ];
 
 export const ResultsScreen = ({ score, analysis, onRestart, photo }: ResultsScreenProps) => {
@@ -93,29 +95,61 @@ export const ResultsScreen = ({ score, analysis, onRestart, photo }: ResultsScre
   // Check if image is invalid/unusable
   const imageInvalid = isInvalidImage(analysis);
 
-  // Save photo to device
+  // Save photo to device - uses native iOS Photo Library on mobile
   const handleSave = useCallback(async () => {
     if (!photo || isSaving) return;
 
     setIsSaving(true);
     try {
-      // Convert data URL to blob and trigger download
-      const response = await fetch(photo);
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `hairlinescan-${Date.now()}.jpg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      // Check if running on native iOS/Android
+      if (Capacitor.isNativePlatform()) {
+        // Validate photo data URL format
+        if (!photo.startsWith('data:image/')) {
+          throw new Error('Invalid photo format');
+        }
 
-      setSaved(true);
-      toast.success('Photo saved successfully');
-      setTimeout(() => setSaved(false), 2000);
-    } catch {
-      toast.error('Failed to save photo');
+        // Save to Photo Library using Media plugin
+        // The plugin supports base64 data URLs directly
+        // Not specifying albumIdentifier saves to default Camera Roll
+        // and triggers add-only permission on iOS 14+
+        const result = await Media.savePhoto({
+          path: photo,
+        });
+
+        if (result && result.filePath) {
+          setSaved(true);
+          toast.success('Photo saved to Photo Library');
+          setTimeout(() => setSaved(false), 2000);
+        } else {
+          throw new Error('Save returned no file path');
+        }
+      } else {
+        // Fallback for web browser - use download link
+        const response = await fetch(photo);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `hairlinescan-${Date.now()}.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        setSaved(true);
+        toast.success('Photo saved successfully');
+        setTimeout(() => setSaved(false), 2000);
+      }
+    } catch (error: unknown) {
+      // Handle specific error codes from Media plugin
+      const mediaError = error as { code?: string; message?: string };
+      if (mediaError.code === 'accessDenied') {
+        toast.error('Permission denied. Please allow photo library access in Settings.');
+      } else if (mediaError.code === 'argumentError') {
+        toast.error('Invalid photo format. Please try again.');
+      } else {
+        toast.error('Failed to save photo. Please try again.');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -264,12 +298,12 @@ export const ResultsScreen = ({ score, analysis, onRestart, photo }: ResultsScre
               </div>
             ) : (
               <>
-                {/* Entertainment Disclaimer Banner */}
-                <div className="glass-panel p-3 mb-4 bg-amber-500/10 border border-amber-500/30 opacity-0 animate-fade-up" style={{ animationDelay: '0ms', animationFillMode: 'forwards' }}>
+                {/* Disclaimer Banner */}
+                <div className="glass-panel p-3 mb-4 bg-blue-500/10 border border-blue-500/30 opacity-0 animate-fade-up" style={{ animationDelay: '0ms', animationFillMode: 'forwards' }}>
                   <div className="flex items-center gap-2 justify-center">
-                    <Info className="w-4 h-4 text-amber-500" />
-                    <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
-                      For Entertainment Only - Not Medical Advice
+                    <Info className="w-4 h-4 text-blue-500" />
+                    <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                      Cosmetic Analysis for Entertainment Only
                     </span>
                   </div>
                 </div>
@@ -277,15 +311,19 @@ export const ResultsScreen = ({ score, analysis, onRestart, photo }: ResultsScre
                 {/* Metrics Card */}
                 {metrics && (
                   <div className="glass-panel p-6 mb-6 space-y-6">
-                    <p className="text-xs text-center text-muted-foreground mb-2">Fun scores for entertainment</p>
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-6">
-                      <MetricRow label="Style Score" value={metrics.overall} delay={0} />
-                      <MetricRow label="Potential" value={metrics.potential} delay={50} />
-                      <MetricRow label="Fullness" value={metrics.density} delay={100} />
-                      <MetricRow label="Volume" value={metrics.thickness} delay={150} />
-                      <MetricRow label="Shape" value={metrics.hairline} delay={200} />
-                      <MetricRow label="Condition" value={metrics.scalp} delay={250} />
+                    <div className="text-center mb-4">
+                      <p className="text-lg font-semibold text-foreground">Appearance Analysis</p>
+                      <p className="text-xs text-muted-foreground">AI-generated cosmetic assessment</p>
                     </div>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-6">
+                      <MetricRow label="Overall Score" value={metrics.overall} delay={0} />
+                      <MetricRow label="Symmetry" value={metrics.potential} delay={50} />
+                      <MetricRow label="Definition" value={metrics.density} delay={100} />
+                      <MetricRow label="Fullness" value={metrics.thickness} delay={150} />
+                      <MetricRow label="Structure" value={metrics.hairline} delay={200} />
+                      <MetricRow label="Texture" value={metrics.scalp} delay={250} />
+                    </div>
+                    <p className="text-[10px] text-center text-muted-foreground/60 mt-2">For entertainment purposes only - not a professional assessment</p>
                   </div>
                 )}
 
@@ -425,16 +463,16 @@ export const ResultsScreen = ({ score, analysis, onRestart, photo }: ResultsScre
                 </div>
               </div>
 
-              {/* Professional Advice Note */}
+              {/* Medical Disclaimer Note */}
               <div
                 className="opacity-0 animate-fade-up"
                 style={{ animationDelay: '225ms', animationFillMode: 'forwards' }}
               >
-                <div className="glass-panel p-4 bg-blue-500/5 border border-blue-500/20">
+                <div className="glass-panel p-4 bg-amber-500/10 border border-amber-500/30">
                   <div className="flex items-start gap-3">
-                    <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      <strong>Note:</strong> For any concerns about your hair or scalp, please consult a licensed dermatologist or healthcare professional. This app is for entertainment purposes only.
+                      <strong className="text-amber-600 dark:text-amber-400">Medical Disclaimer:</strong> These suggestions are for entertainment only. This app does not provide medical advice. <strong>Consult a qualified doctor or dermatologist</strong> for any health concerns related to hair loss.
                     </p>
                   </div>
                 </div>
@@ -457,10 +495,10 @@ export const ResultsScreen = ({ score, analysis, onRestart, photo }: ResultsScre
           </Button>
         </div>
 
-        {/* Disclaimer */}
-        <div className="mt-4 p-3 rounded-lg bg-secondary/50 border border-border">
+        {/* Medical Disclaimer */}
+        <div className="mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
           <p className="text-xs text-muted-foreground text-center leading-relaxed">
-            <strong>Entertainment Only:</strong> This app does not provide medical advice, diagnosis, or treatment. Scores are for fun and are not scientifically validated. Always consult a dermatologist for any hair or scalp concerns.
+            <strong className="text-amber-600 dark:text-amber-400">Medical Disclaimer:</strong> This app is for entertainment purposes only and does not provide medical advice, diagnosis, or treatment. Results are AI-generated and not scientifically validated. <strong>Please consult a qualified doctor or dermatologist</strong> before making any health-related decisions.
           </p>
         </div>
       </div>

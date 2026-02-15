@@ -137,13 +137,13 @@ export const CameraScreen = ({ onStartScan, onCancel, streamRef }: CameraScreenP
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-secondary/50">
               <Camera className="w-16 h-16 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground text-sm mb-4">Camera not enabled</p>
-              <Button 
-                variant="scanner" 
+              <p className="text-muted-foreground text-sm mb-4">Camera access needed</p>
+              <Button
+                variant="scanner"
                 onClick={startCamera}
                 disabled={isLoading}
               >
-                {isLoading ? "Enabling..." : "Enable Camera"}
+                {isLoading ? "Starting..." : "Continue with Camera"}
               </Button>
             </div>
           )}

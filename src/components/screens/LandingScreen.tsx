@@ -25,13 +25,13 @@ export const LandingScreen = ({ onStart }: LandingScreenProps) => {
 
         {/* Tagline */}
         <p className="text-muted-foreground mb-8 max-w-sm mx-auto leading-relaxed">
-          Fun AI-powered hairline analysis for entertainment
+          AI-powered cosmetic hairline analysis
         </p>
 
         {/* Features */}
         <div className="grid grid-cols-3 gap-3 mb-8" role="list" aria-label="App features">
           {[
-            { icon: Brain, label: "AI Fun", description: "AI-powered entertainment analysis" },
+            { icon: Brain, label: "AI Analysis", description: "AI-powered appearance analysis" },
             { icon: Zap, label: "Instant", description: "Get results in seconds" },
             { icon: Shield, label: "Private", description: "Photos not stored" },
           ].map(({ icon: Icon, label, description }, i) => (
@@ -55,7 +55,7 @@ export const LandingScreen = ({ onStart }: LandingScreenProps) => {
             <div className="text-left">
               <p className="text-xs text-foreground font-medium mb-1">Your Privacy</p>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Photos are processed temporarily for analysis and are <strong>not stored</strong> on our servers. We do not collect personal information. <a href="https://abel-ninan.github.io/hairlinescan-ai-demo-13/privacy-policy.html" target="_blank" rel="noopener noreferrer" className="text-primary underline">Privacy Policy</a>
+                Photos are processed temporarily for analysis and are <strong>not stored</strong> on our servers. We do not collect personal information. <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" className="text-primary underline">Privacy Policy</a>
               </p>
             </div>
           </div>
@@ -74,19 +74,19 @@ export const LandingScreen = ({ onStart }: LandingScreenProps) => {
           Begin Scan
         </Button>
 
-        {/* Entertainment Disclaimer */}
+        {/* Medical Disclaimer */}
         <div className="mt-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 opacity-0 animate-fade-up" style={{ animationDelay: '400ms', animationFillMode: 'forwards' }}>
           <div className="flex items-start gap-3">
             <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" aria-hidden="true" />
             <p className="text-xs text-muted-foreground leading-relaxed text-left">
-              <strong className="text-amber-600 dark:text-amber-400">Entertainment Only:</strong> This app is for fun and does not provide medical advice, diagnosis, or treatment. Results are not scientifically validated. Consult a dermatologist for any concerns.
+              <strong className="text-amber-600 dark:text-amber-400">Medical Disclaimer:</strong> This app is for entertainment purposes only and does not provide medical advice, diagnosis, or treatment. AI-generated results are not scientifically validated. <strong>Always consult a qualified healthcare provider or dermatologist</strong> before making any decisions related to hair loss or health concerns.
             </p>
           </div>
         </div>
 
         {/* By continuing text */}
         <p className="mt-4 text-xs text-muted-foreground/60 opacity-0 animate-fade-up" style={{ animationDelay: '450ms', animationFillMode: 'forwards' }}>
-          By using this app, you agree to our <a href="https://abel-ninan.github.io/hairlinescan-ai-demo-13/terms.html" target="_blank" rel="noopener noreferrer" className="underline">Terms</a> and <a href="https://abel-ninan.github.io/hairlinescan-ai-demo-13/privacy-policy.html" target="_blank" rel="noopener noreferrer" className="underline">Privacy Policy</a>
+          By using this app, you agree to our <a href="/terms.html" target="_blank" rel="noopener noreferrer" className="underline">Terms</a> and <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" className="underline">Privacy Policy</a>
         </p>
       </div>
     </div>

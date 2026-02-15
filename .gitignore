@@ -36,3 +36,29 @@ ios/App/App.xcodeproj/xcuserdata/
 *.xcworkspace
 *.xcuserdata
 .claude/settings.local.json
+
+# Supabase local files
+supabase/.temp/
+supabase/.branches/
+supabase/seed.sql
+
+# Additional security
+*.pem
+*.p12
+*.key
+*.cer
+*.mobileprovision
+secrets/
+.secrets
+credentials.json
+serviceAccountKey.json
+
+# macOS
+.DS_Store
+*.DS_Store
+
+# Build artifacts
+*.ipa
+*.app
+*.dSYM.zip
+*.dSYM

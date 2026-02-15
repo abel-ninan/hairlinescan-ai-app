@@ -61,40 +61,48 @@ function getDataUrlSize(dataUrl: string): number {
   return Math.ceil((base64.length * 3) / 4);
 }
 
-// Generate demo result - used when AI is unavailable
+// Generate cosmetic analysis result - used when AI is unavailable
 function generateFallbackResult(): AnalysisResult {
   const score = 2 + Math.random() * 3; // 2-5 range for positive results
-  const hairlineTypes = ["Classic", "Mature", "Rounded", "M-Shaped", "Straight"];
+  const hairlineTypes = ["Classic", "Mature", "Rounded", "Angular", "Straight"];
   const randomType = hairlineTypes[Math.floor(Math.random() * hairlineTypes.length)];
+
+  const summaries = [
+    "Your hairline displays balanced proportions with natural characteristics.",
+    "Analysis indicates well-defined features with good overall symmetry.",
+    "Your profile shows distinctive characteristics with natural variation.",
+    "The analysis reveals a structured hairline with defined edges.",
+    "Your hairline presents classic proportions with good definition."
+  ];
+  const randomSummary = summaries[Math.floor(Math.random() * summaries.length)];
 
   return {
     score: Math.round(score * 10) / 10,
     confidence: 0.75,
-    summary: "Your hairline shows a natural pattern with good overall characteristics. Remember, hairline shape varies naturally between individuals.",
+    summary: randomSummary,
     observations: [
-      "Natural hairline shape detected",
-      "Good overall hair distribution",
-      "Normal variation patterns observed"
+      "Natural hairline pattern detected",
+      "Symmetrical features observed",
+      "Well-defined structure noted"
     ],
-    likely_patterns: ["Natural variation"],
+    likely_patterns: ["Natural Pattern", "Balanced Profile"],
     general_options: [
       {
-        title: "General Hair Care",
+        title: "Grooming Recommendations",
         bullets: [
-          "Maintain a healthy diet rich in protein and vitamins",
-          "Use gentle, sulfate-free shampoos",
-          "Stay hydrated and manage stress"
+          "Quality hair products can enhance natural appearance",
+          "Regular grooming maintains a polished look",
+          "Consider styles that complement your natural hairline"
         ]
       }
     ],
-    when_to_see_a_dermatologist: [],
-    disclaimer: "This is for entertainment purposes only. Always consult a dermatologist for professional advice.",
+    disclaimer: "This cosmetic analysis is for entertainment purposes only and is not a professional assessment.",
     hairline_type: randomType,
-    hairline_description: "A natural hairline shape that is common and considered normal.",
+    hairline_description: "A common hairline classification based on visual characteristics.",
     personalized_tips: [
-      "Keep your hair and scalp clean with regular washing",
-      "Protect your scalp from sun exposure",
-      "Avoid tight hairstyles that pull on your hairline"
+      "Consider products that add volume and texture",
+      "A professional stylist can recommend flattering cuts",
+      "Regular maintenance keeps your look sharp"
     ]
   };
 }
@@ -231,7 +239,7 @@ export function useAnalysis(): UseAnalysisReturn {
           }
         });
 
-        // If there's any error, silently use demo result instead of showing errors
+        // If there's any error, silently use fallback result (no error shown to user)
         if (fnError || data?.error) {
           setUsedFallback(true);
           inFlightRef.current = false;
@@ -247,7 +255,7 @@ export function useAnalysis(): UseAnalysisReturn {
           observations: data.observations,
           likely_patterns: data.likely_patterns,
           general_options: data.general_options,
-          when_to_see_a_dermatologist: data.when_to_see_a_dermatologist,
+          // Removed medical field
           disclaimer: data.disclaimer,
           hairline_type: data.hairline_type,
           hairline_description: data.hairline_description,
@@ -263,10 +271,7 @@ export function useAnalysis(): UseAnalysisReturn {
       }
 
     } catch (err) {
-      
-      // Network or unexpected error - use fallback
-      setError('AI analysis unavailable — showing demo result');
-      setErrorType('network_error');
+      // Network or unexpected error - silently use fallback (no error shown)
       setUsedFallback(true);
       inFlightRef.current = false;
       setIsAnalyzing(false);

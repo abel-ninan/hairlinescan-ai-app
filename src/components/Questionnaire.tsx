@@ -9,10 +9,10 @@ import {
 
 export interface QuestionnaireData {
   ageRange: string;
-  timeframe: string;
-  familyHistory: string;
-  shedding: string;
-  scalpIssues: string;
+  styleTime: string;
+  familyStyle: string;
+  stylingFreq: string;
+  careRoutine: string;
 }
 
 interface QuestionnaireProps {
@@ -47,12 +47,12 @@ export const Questionnaire = ({ data, onChange }: QuestionnaireProps) => {
           </Select>
         </div>
 
-        {/* Timeframe */}
+        {/* Style Duration */}
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">How long have you had this hairstyle?</Label>
-          <Select value={data.timeframe} onValueChange={(v) => handleChange("timeframe", v)}>
+          <Select value={data.styleTime} onValueChange={(v) => handleChange("styleTime", v)}>
             <SelectTrigger className="h-9 bg-secondary/50 border-border/50">
-              <SelectValue placeholder="Select timeframe" />
+              <SelectValue placeholder="Select duration" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="weeks">A few weeks</SelectItem>
@@ -62,48 +62,48 @@ export const Questionnaire = ({ data, onChange }: QuestionnaireProps) => {
           </Select>
         </div>
 
-        {/* Hair Type */}
+        {/* Family Style */}
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Hair type in your family</Label>
-          <Select value={data.familyHistory} onValueChange={(v) => handleChange("familyHistory", v)}>
+          <Label className="text-xs text-muted-foreground">Hair style in your family</Label>
+          <Select value={data.familyStyle} onValueChange={(v) => handleChange("familyStyle", v)}>
             <SelectTrigger className="h-9 bg-secondary/50 border-border/50">
               <SelectValue placeholder="Select option" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="yes">Similar to mine</SelectItem>
-              <SelectItem value="no">Different from mine</SelectItem>
-              <SelectItem value="unsure">Not sure</SelectItem>
+              <SelectItem value="similar">Similar to mine</SelectItem>
+              <SelectItem value="different">Different from mine</SelectItem>
+              <SelectItem value="varied">Varies</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        {/* Styling */}
+        {/* Styling Frequency */}
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">How often do you style your hair?</Label>
-          <Select value={data.shedding} onValueChange={(v) => handleChange("shedding", v)}>
+          <Select value={data.stylingFreq} onValueChange={(v) => handleChange("stylingFreq", v)}>
             <SelectTrigger className="h-9 bg-secondary/50 border-border/50">
               <SelectValue placeholder="Select frequency" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="low">Rarely</SelectItem>
-              <SelectItem value="medium">Sometimes</SelectItem>
-              <SelectItem value="high">Daily</SelectItem>
+              <SelectItem value="rarely">Rarely</SelectItem>
+              <SelectItem value="sometimes">Sometimes</SelectItem>
+              <SelectItem value="daily">Daily</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        {/* Hair Care */}
+        {/* Care Routine */}
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Your hair care routine</Label>
-          <Select value={data.scalpIssues} onValueChange={(v) => handleChange("scalpIssues", v)}>
+          <Select value={data.careRoutine} onValueChange={(v) => handleChange("careRoutine", v)}>
             <SelectTrigger className="h-9 bg-secondary/50 border-border/50">
               <SelectValue placeholder="Select routine" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Basic (shampoo only)</SelectItem>
-              <SelectItem value="itch">Moderate (shampoo + conditioner)</SelectItem>
-              <SelectItem value="flaking">Extensive (multiple products)</SelectItem>
-              <SelectItem value="redness">Professional treatments</SelectItem>
+              <SelectItem value="basic">Basic (shampoo only)</SelectItem>
+              <SelectItem value="moderate">Moderate (shampoo + conditioner)</SelectItem>
+              <SelectItem value="extensive">Extensive (multiple products)</SelectItem>
+              <SelectItem value="professional">Professional treatments</SelectItem>
             </SelectContent>
           </Select>
         </div>

@@ -23,10 +23,10 @@ interface CaptureScreenProps {
 
 const initialQuestionnaire: QuestionnaireData = {
   ageRange: "",
-  timeframe: "",
-  familyHistory: "",
-  shedding: "",
-  scalpIssues: "",
+  styleTime: "",
+  familyStyle: "",
+  stylingFreq: "",
+  careRoutine: "",
 };
 
 export const CaptureScreen = ({ onAnalyze, onCancel, streamRef }: CaptureScreenProps) => {
@@ -42,6 +42,7 @@ export const CaptureScreen = ({ onAnalyze, onCancel, streamRef }: CaptureScreenP
   const [isScanning, setIsScanning] = useState(false);
 
   const [questionnaire, setQuestionnaire] = useState<QuestionnaireData>(initialQuestionnaire);
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
   const hasAtLeastOnePhoto = photos.front !== null || photos.left !== null || photos.right !== null;
   const canAnalyze = consent && hasAtLeastOnePhoto;
@@ -65,8 +66,22 @@ export const CaptureScreen = ({ onAnalyze, onCancel, streamRef }: CaptureScreenP
 
       streamRef.current = mediaStream;
       setHasCamera(true);
-    } catch {
-      // Camera access denied or not available
+    } catch (error: unknown) {
+      // Handle specific camera errors for better user feedback
+      const err = error as { name?: string };
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        // User denied camera permission
+        setCameraError('Camera access denied. Please allow camera access in your device Settings to use this feature.');
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        // No camera available
+        setCameraError('No camera found on this device.');
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        // Camera in use by another app
+        setCameraError('Camera is in use by another app. Please close other camera apps and try again.');
+      } else {
+        // Generic error
+        setCameraError('Unable to access camera. Please check your settings and try again.');
+      }
       setHasCamera(false);
     } finally {
       setIsLoading(false);
@@ -218,16 +233,31 @@ export const CaptureScreen = ({ onAnalyze, onCancel, streamRef }: CaptureScreenP
               className="absolute inset-0 w-full h-full object-cover"
             />
           ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-secondary/50">
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-secondary/50 p-6">
               <SwitchCamera className="w-16 h-16 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground text-sm mb-4">Camera not enabled</p>
-              <Button 
-                variant="scanner" 
-                onClick={startCamera}
-                disabled={isLoading}
-              >
-                {isLoading ? "Enabling..." : "Enable Camera"}
-              </Button>
+              {cameraError ? (
+                <>
+                  <p className="text-destructive text-sm mb-4 text-center">{cameraError}</p>
+                  <Button
+                    variant="scanner"
+                    onClick={() => { setCameraError(null); startCamera(); }}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? "Starting..." : "Try Again"}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="text-muted-foreground text-sm mb-4">Camera access needed</p>
+                  <Button
+                    variant="scanner"
+                    onClick={startCamera}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? "Starting..." : "Continue with Camera"}
+                  </Button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -276,7 +306,7 @@ export const CaptureScreen = ({ onAnalyze, onCancel, streamRef }: CaptureScreenP
             className="mt-0.5"
           />
           <Label htmlFor="consent" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
-            I understand this is for entertainment only, not medical advice. Results are just for fun!
+            I understand this is for <strong>entertainment only</strong>, not medical advice. I will consult a doctor for any health concerns.
           </Label>
         </div>
       </div>

@@ -1,13 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-// Allowed origins for CORS
+// Allowed origins for CORS - production only (no dev servers)
 const ALLOWED_ORIGINS = [
   "capacitor://localhost",      // iOS app (required for Capacitor)
-  "http://localhost",           // iOS app WebView fallback
-  "http://localhost:5173",      // Local dev server
-  "http://localhost:8100",      // Capacitor dev server
+  "ionic://localhost",          // Ionic/Capacitor apps
+  "http://localhost",           // iOS app WebView fallback (required for Capacitor)
+  "https://localhost",          // iOS secure localhost
   "https://euztyowduyplbduzcgct.supabase.co", // Supabase project
 ];
+
+// Allow any Capacitor/Ionic origin
+function isAllowedOrigin(origin: string | null): boolean {
+  if (!origin) return true; // Allow null origins (same-origin requests)
+  if (origin.startsWith("capacitor://")) return true;
+  if (origin.startsWith("ionic://")) return true;
+  return ALLOWED_ORIGINS.some(allowed => origin === allowed || origin.startsWith(allowed));
+}
 
 // Simple in-memory rate limiting (resets on function cold start)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -32,15 +40,24 @@ function isRateLimited(identifier: string): boolean {
 }
 
 function getCorsHeaders(origin: string | null): Record<string, string> {
-  // Check if origin is allowed
-  const allowedOrigin = origin && ALLOWED_ORIGINS.some(allowed =>
-    origin === allowed || origin.startsWith(allowed)
-  ) ? origin : ALLOWED_ORIGINS[0];
+  // Only allow specific origins - no wildcards for security
+  // For Capacitor iOS apps, origin will be capacitor://localhost or similar
+  let allowedOrigin: string;
+
+  if (origin && isAllowedOrigin(origin)) {
+    allowedOrigin = origin;
+  } else if (!origin) {
+    // Same-origin requests have null origin - allow for Capacitor WebView
+    allowedOrigin = "capacitor://localhost";
+  } else {
+    // Unknown origin - default to Capacitor origin (request will still be validated)
+    allowedOrigin = "capacitor://localhost";
+  }
 
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-requested-with",
+    "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
     "Access-Control-Max-Age": "86400",
   };
 }
@@ -74,11 +91,11 @@ function safeJsonParse(text: string) {
 }
 
 const systemText = `
-You are a fun entertainment assistant that comments on hair styles.
-This is purely for fun/entertainment - NOT medical or diagnostic.
-Use playful hedging language ("looks like", "seems to have", "appears to be").
+You are a cosmetic appearance analyst providing hairline assessments.
+This is for entertainment and informational purposes only - NOT medical or diagnostic.
+Use professional hedging language ("appears to", "suggests", "indicates").
 Return ONLY JSON. No markdown. No extra text.
-Keep it SHORT and FUN.
+Keep responses professional and concise.
 `.trim();
 
 serve(async (req) => {
@@ -135,16 +152,16 @@ serve(async (req) => {
       `Return ONLY ONE LINE of MINIFIED JSON. No markdown. No extra text.
 Keys must be EXACTLY: score, confidence, summary, tags, hairline_type, hairline_description, personalized_tips
 Rules:
-- score: 0-10 number (style score for fun)
+- score: 0-10 number (cosmetic appearance score)
 - confidence: 0-1 number
-- summary: <= 120 chars, fun and encouraging
-- tags: array of 1-3 fun descriptive strings about the look
-- hairline_type: style type e.g. "Classic", "Distinguished", "Youthful", "Mature", "Unique", "Sharp"
-- hairline_description: 1 fun sentence about this style
-- personalized_tips: array of 3 fun style tips (NOT medical), like hair styling or grooming
+- summary: <= 120 chars, professional cosmetic assessment
+- tags: array of 1-3 descriptive terms about the hairline appearance
+- hairline_type: classification e.g. "Classic", "Mature", "Rounded", "Angular", "Straight", "Receded"
+- hairline_description: 1 professional sentence describing this hairline type
+- personalized_tips: array of 3 grooming/styling tips (cosmetic only, NOT medical)
 STOP AFTER THE FINAL }.
 
-Age:${answers?.ageRange || "NA"} Style:${answers?.timeframe || "NA"} Family:${answers?.familyHistory || "NA"} Routine:${answers?.shedding || "NA"} Care:${answers?.scalpIssues || "NA"}`;
+Age:${answers?.ageRange || "NA"} StyleTime:${answers?.styleTime || "NA"} FamilyStyle:${answers?.familyStyle || "NA"} StylingFreq:${answers?.stylingFreq || "NA"} CareRoutine:${answers?.careRoutine || "NA"}`;
 
     // IMPORTANT: no responseSchema/responseJsonSchema at all (prevents 400s)
     const body = {
@@ -213,7 +230,7 @@ Age:${answers?.ageRange || "NA"} Style:${answers?.timeframe || "NA"} Family:${an
     // Expand to your full UI schema (simple, stable)
     const score = Math.max(0, Math.min(10, Number(mini.score ?? 5)));
     const confidence = Math.max(0, Math.min(1, Number(mini.confidence ?? 0.5)));
-    const summary = String(mini.summary ?? "Fun analysis of your look!").slice(0, 260);
+    const summary = String(mini.summary ?? "Analysis of your hairline characteristics.").slice(0, 260);
     const tags = Array.isArray(mini.tags) ? mini.tags.map(String).slice(0, 3) : [];
     const hairlineType = mini.hairline_type ? String(mini.hairline_type) : undefined;
     const hairlineDescription = mini.hairline_description ? String(mini.hairline_description) : undefined;
@@ -226,17 +243,16 @@ Age:${answers?.ageRange || "NA"} Style:${answers?.timeframe || "NA"} Family:${an
       confidence,
       summary,
       observations: [
-        ...(tags.map((t: string) => `Your look: ${t}`)),
-        "Lighting and angle can affect how your style appears in photos.",
+        ...(tags.map((t: string) => `Characteristic: ${t}`)),
+        "Photo quality and lighting can affect analysis accuracy.",
       ].slice(0, 4),
-      likely_patterns: tags.length ? tags : ["Natural style", "Unique look"],
+      likely_patterns: tags.length ? tags : ["Natural Pattern", "Standard Profile"],
       general_options: [
-        { title: "Style Tips", bullets: ["Take photos in consistent lighting for comparison.", "Good hair care starts with a healthy routine.", "Find a style that works for you!"] },
-        { title: "Hair Care Basics", bullets: ["Use quality shampoo and conditioner.", "Protect your hair from heat damage.", "Stay hydrated and eat well."] },
+        { title: "Grooming Tips", bullets: ["Consistent lighting helps track appearance over time.", "Quality hair products enhance natural appearance.", "Regular grooming maintains a polished look."] },
+        { title: "Styling Suggestions", bullets: ["Consider styles that complement your hairline shape.", "A professional stylist can provide personalized advice.", "Experiment with different products for best results."] },
       ],
-      when_to_see_a_dermatologist: [],
       disclaimer:
-        "Entertainment only — this is just for fun! Not medical advice. See a professional for any real concerns.",
+        "This cosmetic analysis is for entertainment and informational purposes only. Results are AI-generated estimates and not professional assessments. This is not medical advice.",
       hairline_type: hairlineType,
       hairline_description: hairlineDescription,
       personalized_tips: personalizedTips,

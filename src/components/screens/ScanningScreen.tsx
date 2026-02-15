@@ -15,12 +15,12 @@ interface ScanningScreenProps {
   questionnaire?: QuestionnaireData;
 }
 
-// Fun entertainment-focused scan steps (NOT medical)
+// Fun entertainment-focused scan steps
 const SCAN_STEPS = [
-  { label: "Scanning your look", icon: Scan, detail: "Processing your photo" },
-  { label: "Finding your style", icon: Sparkles, detail: "AI having fun with your image" },
-  { label: "Creating your vibe", icon: Cpu, detail: "Generating entertainment results" },
-  { label: "Almost there", icon: BarChart3, detail: "Preparing your fun results" },
+  { label: "Scanning your look", icon: Scan, detail: "Capturing your style" },
+  { label: "Finding your style", icon: Sparkles, detail: "Analyzing your photo" },
+  { label: "Creating your vibe", icon: Cpu, detail: "Generating your results" },
+  { label: "Almost there", icon: BarChart3, detail: "Preparing your score" },
 ];
 
 export const ScanningScreen = ({ onComplete, onCancel, photos, questionnaire }: ScanningScreenProps) => {
@@ -78,10 +78,10 @@ export const ScanningScreen = ({ onComplete, onCancel, photos, questionnaire }: 
       try {
         const result = await analyze(photos, questionnaire || {
           ageRange: '',
-          timeframe: '',
-          familyHistory: '',
-          shedding: '',
-          scalpIssues: ''
+          styleTime: '',
+          familyStyle: '',
+          stylingFreq: '',
+          careRoutine: ''
         });
 
         if (result) {
