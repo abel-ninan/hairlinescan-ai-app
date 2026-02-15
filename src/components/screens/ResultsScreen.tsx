@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { AnalysisResult } from "@/types/analysis";
+import { Scan } from "@/types/database";
 import {
   RotateCcw,
   Sun,
@@ -16,17 +17,22 @@ import {
   Eye,
   ChevronRight,
   Info,
+  ArrowLeft,
+  Calendar,
+  Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Media } from "@capacitor-community/media";
 import { Capacitor } from "@capacitor/core";
+import { format } from "date-fns";
 
 interface ResultsScreenProps {
   score: number;
   analysis?: AnalysisResult | null;
   onRestart: () => void;
   photo?: string | null;
+  savedScan?: Scan; // For viewing saved scans
 }
 
 // Check if the analysis indicates an invalid/unusable image
@@ -86,7 +92,7 @@ const hairCareTips = [
   { name: "Finishing Touch", description: "A light hold spray can keep your style in place all day" },
 ];
 
-export const ResultsScreen = ({ score, analysis, onRestart, photo }: ResultsScreenProps) => {
+export const ResultsScreen = ({ score, analysis, onRestart, photo, savedScan }: ResultsScreenProps) => {
   const [activeTab, setActiveTab] = useState<'rating' | 'tips'>('rating');
   const [isSaving, setIsSaving] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
@@ -94,6 +100,9 @@ export const ResultsScreen = ({ score, analysis, onRestart, photo }: ResultsScre
 
   // Check if image is invalid/unusable
   const imageInvalid = isInvalidImage(analysis);
+
+  // Determine if this is a saved scan view
+  const isViewingSavedScan = !!savedScan;
 
   // Save photo to device - uses native iOS Photo Library on mobile
   const handleSave = useCallback(async () => {
