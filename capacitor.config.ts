@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.hairlinescan.app',
-  appName: 'HairlineScan',
+  appName: 'HairMaxx',
   webDir: 'dist',
   ios: {
     contentInset: 'always',

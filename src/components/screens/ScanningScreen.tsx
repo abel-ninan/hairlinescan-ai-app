@@ -9,35 +9,53 @@ import { useAnalysis } from "@/hooks/useAnalysis";
 import { Button } from "@/components/ui/button";
 
 interface ScanningScreenProps {
-  onComplete: (score: number, result?: AnalysisResult) => void;
+  onComplete: (result: AnalysisResult) => void;
   onCancel: () => void;
   photos?: CapturedPhotos;
   questionnaire?: QuestionnaireData;
+  previewOnly?: boolean;
+  onPaywallNeeded?: () => void;
 }
 
-// Fun entertainment-focused scan steps
 const SCAN_STEPS = [
-  { label: "Scanning your look", icon: Scan, detail: "Capturing your style" },
-  { label: "Finding your style", icon: Sparkles, detail: "Analyzing your photo" },
-  { label: "Creating your vibe", icon: Cpu, detail: "Generating your results" },
-  { label: "Almost there", icon: BarChart3, detail: "Preparing your score" },
+  { label: "Processing images...", icon: Scan, detail: "Preparing your photos" },
+  { label: "Analyzing hairline pattern...", icon: Sparkles, detail: "AI pattern recognition" },
+  { label: "Assessing appearance...", icon: Cpu, detail: "Detailed assessment" },
+  { label: "Building your care tips...", icon: BarChart3, detail: "Generating suggestions" },
 ];
 
-export const ScanningScreen = ({ onComplete, onCancel, photos, questionnaire }: ScanningScreenProps) => {
+export const ScanningScreen = ({ onComplete, onCancel, photos, questionnaire, previewOnly, onPaywallNeeded }: ScanningScreenProps) => {
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState(0);
   const [displayPhotoIndex, setDisplayPhotoIndex] = useState(0);
   const [analysisComplete, setAnalysisComplete] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-  const [scanLinePosition, setScanLinePosition] = useState(0);
+  const [analysisFailed, setAnalysisFailed] = useState(false);
+  const [retryTrigger, setRetryTrigger] = useState(0);
   const hasStartedRef = useRef(false);
+  const mountedRef = useRef(true);
+  const analysisCompleteRef = useRef(false);
+  const analysisResultRef = useRef<AnalysisResult | null>(null);
+  const analysisFailedRef = useRef(false);
+  const onCompleteRef = useRef(onComplete);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // Keep refs in sync with state
+  useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
+  useEffect(() => { analysisCompleteRef.current = analysisComplete; }, [analysisComplete]);
+  useEffect(() => { analysisResultRef.current = analysisResult; }, [analysisResult]);
+  useEffect(() => { analysisFailedRef.current = analysisFailed; }, [analysisFailed]);
 
   const {
     error,
     errorType,
     usedSinglePhoto,
-    cooldownRemaining,
-    analyze
+    analyze,
+    clearError
   } = useAnalysis();
 
   const capturedPhotos = photos
@@ -48,204 +66,212 @@ export const ScanningScreen = ({ onComplete, onCancel, photos, questionnaire }: 
     ? [photos.front ? "Front" : null, photos.left ? "Left" : null, photos.right ? "Right" : null].filter(Boolean)
     : [];
 
-  // Scanning line animation
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setScanLinePosition(prev => (prev + 2) % 100);
-    }, 30);
-
-    return () => clearInterval(interval);
-  }, []);
+  // Scanning line animation — CSS-driven via scan-sweep keyframe
+  // No JS interval needed; position is driven by CSS animation
 
   // Cycle through photos during scanning
   useEffect(() => {
     if (capturedPhotos.length <= 1) return;
-
     const interval = setInterval(() => {
       setDisplayPhotoIndex(prev => (prev + 1) % capturedPhotos.length);
     }, 3000);
-
     return () => clearInterval(interval);
   }, [capturedPhotos.length]);
 
-  // Start analysis ONCE when component mounts
+  // Preview mode — show scanning briefly then trigger paywall
   useEffect(() => {
-    if (hasStartedRef.current || !photos || capturedPhotos.length === 0) return;
+    if (!previewOnly || !onPaywallNeeded) return;
+    const timer = setTimeout(() => {
+      if (mountedRef.current) onPaywallNeeded();
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [previewOnly, onPaywallNeeded]);
 
+  // Start analysis (runs once initially, and again on retry) — skip in preview mode
+  useEffect(() => {
+    if (previewOnly) return;
+    if (hasStartedRef.current || !photos || capturedPhotos.length === 0) return;
     hasStartedRef.current = true;
 
     const runAnalysis = async () => {
       try {
         const result = await analyze(photos, questionnaire || {
           ageRange: '',
-          styleTime: '',
-          familyStyle: '',
-          stylingFreq: '',
-          careRoutine: ''
+          recentChanges: '',
+          familyHistory: '',
+          sheddingLevel: '',
+          scalpIssues: ''
         });
 
+        if (!mountedRef.current) return;
         if (result) {
           setAnalysisResult(result);
           setAnalysisComplete(true);
+        } else {
+          setAnalysisFailed(true);
         }
-      } catch {
-        // Errors handled in useAnalysis
+      } catch (err) {
+        if (import.meta.env.DEV) console.error('Analysis error:', err);
+        if (mountedRef.current) setAnalysisFailed(true);
       }
     };
 
     runAnalysis();
-  }, [photos, capturedPhotos.length, questionnaire, analyze]);
+  }, [previewOnly, photos, capturedPhotos.length, questionnaire, analyze, retryTrigger]);
 
-  // Progress animation with timeout fallback
+  // Progress animation - 12 seconds total (uses refs to avoid restarting interval)
+  // retryTrigger in deps ensures the timer restarts on retry
   useEffect(() => {
-    const totalDuration = 8000;
-    const interval = 50;
-    const increment = 100 / (totalDuration / interval);
+    const totalDuration = 12000;
+    const tick = 50;
+    const increment = 100 / (totalDuration / tick);
     let timeAtNinetyFive = 0;
-    const MAX_WAIT_AT_95 = 15000; // 15 seconds max wait at 95%
+    const MAX_WAIT_AT_95 = 120000; // 2 minutes — Gemini 2.5 Flash (thinking model) can take 30-90s
 
     const progressTimer = setInterval(() => {
       setProgress(prev => {
         const next = prev + increment;
 
-        if (next >= 100 && analysisComplete) {
+        if (next >= 100 && analysisCompleteRef.current && analysisResultRef.current) {
           clearInterval(progressTimer);
+          const result = analysisResultRef.current;
           setTimeout(() => {
-            const score = analysisResult?.score ?? (2 + Math.random() * 7);
-            onComplete(score, analysisResult || undefined);
+            if (mountedRef.current) {
+              onCompleteRef.current(result);
+            }
           }, 300);
           return 100;
         }
 
-        // If stuck at 95%, track time and auto-complete after timeout
-        if (next >= 95 && !analysisComplete) {
-          timeAtNinetyFive += interval;
+        // If analysis failed and we hit 95%, show error
+        if (next >= 95 && analysisFailedRef.current) {
+          clearInterval(progressTimer);
+          return 95;
+        }
 
-          // After MAX_WAIT_AT_95ms, force completion with demo result
+        if (next >= 95 && !analysisCompleteRef.current) {
+          timeAtNinetyFive += tick;
           if (timeAtNinetyFive >= MAX_WAIT_AT_95) {
             clearInterval(progressTimer);
-            setTimeout(() => {
-              const fallbackScore = 2 + Math.random() * 5;
-              onComplete(fallbackScore, undefined);
-            }, 300);
-            return 100;
+            setAnalysisFailed(true);
+            return 95;
           }
           return 95;
         }
 
         return Math.min(next, 100);
       });
-    }, interval);
+    }, tick);
 
     return () => clearInterval(progressTimer);
-  }, [onComplete, analysisComplete, analysisResult]);
+  }, [retryTrigger]);
 
-  // Update step based on progress
+  // Step progression - retryTrigger in deps ensures restart on retry
   useEffect(() => {
     const stepTimer = setInterval(() => {
       setCurrentStep(prev => {
-        if (prev < SCAN_STEPS.length - 1) {
-          return prev + 1;
-        }
+        if (prev < SCAN_STEPS.length - 1) return prev + 1;
         clearInterval(stepTimer);
         return prev;
       });
-    }, 2000);
-
+    }, 3000);
     return () => clearInterval(stepTimer);
-  }, []);
+  }, [retryTrigger]);
 
+  const showError = (analysisFailed || (error && errorType !== 'cooldown')) && !analysisComplete;
   const showCooldownError = error && errorType === 'cooldown' && !analysisComplete;
-
   const CurrentStepIcon = SCAN_STEPS[currentStep]?.icon || Scan;
 
+  const handleRetry = () => {
+    hasStartedRef.current = false;
+    setAnalysisFailed(false);
+    setAnalysisComplete(false);
+    setAnalysisResult(null);
+    setProgress(0);
+    setCurrentStep(0);
+    clearError();
+    setRetryTrigger(prev => prev + 1);
+  };
+
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
+      <div className="safe-area-top flex-shrink-0" />
       {/* Header */}
-      <div className="p-4 border-b border-border/50">
+      <div className="px-5 pt-5 pb-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10">
             <CurrentStepIcon className="w-5 h-5 text-primary animate-pulse" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-foreground">AI Analysis</h2>
-            <p className="text-xs text-muted-foreground">
-              {SCAN_STEPS[currentStep]?.detail || "Processing..."}
+            <h2 className="text-lg font-semibold text-foreground tracking-tight">AI Analysis</h2>
+            <p className="text-xs text-muted-foreground" aria-live="polite">
+              {analysisComplete ? 'Analysis complete' : SCAN_STEPS[currentStep]?.detail || "Processing..."}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Main Content - Photo Display with Scanning Effect */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6">
+      {/* Photo display with scanning effect */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6">
         {capturedPhotos.length > 0 && (
           <div className="relative w-full max-w-sm">
-            {/* Photo Container with Scientific Overlay */}
-            <div className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-black/90 shadow-2xl">
-              {/* The Photo */}
+            <div className="relative aspect-[3/4] rounded-3xl overflow-hidden bg-black/90 shadow-2xl">
               <img
                 src={capturedPhotos[displayPhotoIndex]}
                 alt={`Analyzing ${availableLabels[displayPhotoIndex] || 'photo'}`}
                 className="w-full h-full object-cover"
               />
 
-              {/* Scanning Overlay */}
-              <>
-                {/* Grid overlay for scientific look */}
-                <div className="absolute inset-0 pointer-events-none"
-                  style={{
-                    backgroundImage: `
-                      linear-gradient(rgba(34, 197, 94, 0.03) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(34, 197, 94, 0.03) 1px, transparent 1px)
-                    `,
-                    backgroundSize: '20px 20px'
-                  }}
-                />
+              {/* Grid overlay using theme primary */}
+              <div className="absolute inset-0 pointer-events-none"
+                style={{
+                  backgroundImage: `
+                    linear-gradient(hsl(var(--primary) / 0.04) 1px, transparent 1px),
+                    linear-gradient(90deg, hsl(var(--primary) / 0.04) 1px, transparent 1px)
+                  `,
+                  backgroundSize: '20px 20px'
+                }}
+              />
 
-                {/* Scanning line */}
-                <div
-                  className="absolute left-0 right-0 h-1 pointer-events-none"
-                  style={{
-                    top: `${scanLinePosition}%`,
-                    background: 'linear-gradient(90deg, transparent, rgba(34, 197, 94, 0.8), rgba(34, 197, 94, 1), rgba(34, 197, 94, 0.8), transparent)',
-                    boxShadow: '0 0 20px rgba(34, 197, 94, 0.5), 0 0 40px rgba(34, 197, 94, 0.3)'
-                  }}
-                />
+              {/* Scanning line using CSS animation */}
+              <div
+                className="absolute left-0 right-0 h-0.5 pointer-events-none animate-scan-sweep"
+                style={{
+                  background: `linear-gradient(90deg, transparent, hsl(var(--primary) / 0.7), hsl(var(--primary)), hsl(var(--primary) / 0.7), transparent)`,
+                  boxShadow: `0 0 20px hsl(var(--primary) / 0.4), 0 0 40px hsl(var(--primary) / 0.2)`
+                }}
+              />
 
-                {/* Corner brackets */}
-                <div className="absolute top-3 left-3 w-8 h-8 border-l-2 border-t-2 border-primary/70" />
-                <div className="absolute top-3 right-3 w-8 h-8 border-r-2 border-t-2 border-primary/70" />
-                <div className="absolute bottom-3 left-3 w-8 h-8 border-l-2 border-b-2 border-primary/70" />
-                <div className="absolute bottom-3 right-3 w-8 h-8 border-r-2 border-b-2 border-primary/70" />
+              {/* Corner brackets */}
+              <div className="absolute top-3 left-3 w-8 h-8 border-l-2 border-t-2 border-primary/60" />
+              <div className="absolute top-3 right-3 w-8 h-8 border-r-2 border-t-2 border-primary/60" />
+              <div className="absolute bottom-3 left-3 w-8 h-8 border-l-2 border-b-2 border-primary/60" />
+              <div className="absolute bottom-3 right-3 w-8 h-8 border-r-2 border-b-2 border-primary/60" />
 
-                {/* Data readout overlay */}
-                <div className="absolute top-4 right-4 text-right">
-                  <div className="text-[10px] font-mono text-primary/80 bg-black/50 px-2 py-1 rounded">
-                    ANALYZING
-                  </div>
+              {/* Data readout */}
+              <div className="absolute top-4 right-4">
+                <div className="text-[11px] font-mono text-primary/80 bg-black/50 backdrop-blur-sm px-2 py-1 rounded-lg">
+                  ANALYZING
                 </div>
-
-                <div className="absolute bottom-4 left-4">
-                  <div className="text-[10px] font-mono text-primary/80 bg-black/50 px-2 py-1 rounded">
-                    {availableLabels[displayPhotoIndex]?.toUpperCase() || "SCAN"} {displayPhotoIndex + 1}/{capturedPhotos.length}
-                  </div>
+              </div>
+              <div className="absolute bottom-4 left-4">
+                <div className="text-[11px] font-mono text-primary/80 bg-black/50 backdrop-blur-sm px-2 py-1 rounded-lg">
+                  {availableLabels[displayPhotoIndex]?.toUpperCase() || "SCAN"} {displayPhotoIndex + 1}/{capturedPhotos.length}
                 </div>
-              </>
-
+              </div>
             </div>
 
-            {/* Photo indicator dots */}
+            {/* Photo dots */}
             {capturedPhotos.length > 1 && (
               <div className="flex justify-center gap-2 mt-4">
                 {capturedPhotos.map((_, i) => (
-                  <button
+                  <div
                     key={i}
-                    onClick={() => setDisplayPhotoIndex(i)}
                     className={cn(
-                      "h-2 rounded-full transition-all duration-300",
+                      "h-1.5 rounded-full transition-all duration-300",
                       i === displayPhotoIndex
-                        ? "bg-primary w-8"
-                        : "bg-muted-foreground/30 w-2 hover:bg-muted-foreground/50"
+                        ? "bg-primary w-6"
+                        : "bg-white/15 w-1.5"
                     )}
                   />
                 ))}
@@ -254,8 +280,8 @@ export const ScanningScreen = ({ onComplete, onCancel, photos, questionnaire }: 
           </div>
         )}
 
-        {/* Current step display */}
-        <div className="mt-6 text-center">
+        {/* Step label */}
+        <div className="mt-5 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20">
             <CurrentStepIcon className="w-4 h-4 text-primary animate-pulse" />
             <span className="text-sm font-medium text-primary">
@@ -263,36 +289,41 @@ export const ScanningScreen = ({ onComplete, onCancel, photos, questionnaire }: 
             </span>
           </div>
           {usedSinglePhoto && (
-            <p className="text-xs text-muted-foreground mt-2">
-              Using primary photo for optimized analysis
-            </p>
+            <p className="text-xs text-muted-foreground mt-2">Using primary photo for optimized analysis</p>
           )}
         </div>
       </div>
 
-      {/* Cooldown Notice */}
-      {showCooldownError && (
+      {/* Error states */}
+      {(showError || showCooldownError) && (
         <div className="px-6 pb-4">
-          <div className="glass-panel p-4 rounded-xl">
+          <div className="rounded-2xl bg-card border border-border/50 p-5">
             <div className="flex flex-col items-center text-center gap-3">
-              <div>
-                <h3 className="font-medium text-foreground mb-1">Please Wait</h3>
-                <p className="text-sm text-muted-foreground">{error}</p>
+              <h3 className="font-semibold text-foreground">
+                {showCooldownError ? "Please Wait" : "Analysis Failed"}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {error || "Something went wrong. Please try again."}
+              </p>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={onCancel} className="rounded-xl">
+                  Go Back
+                </Button>
+                {showError && (
+                  <Button onClick={handleRetry} className="rounded-xl">
+                    Retry
+                  </Button>
+                )}
               </div>
-              <Button variant="ghost" onClick={onCancel}>
-                Go Back
-              </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Progress Section */}
-      <div className="p-6 pt-0">
+      {/* Progress */}
+      <div className="px-6 pt-2 pb-6">
         <div className="max-w-sm mx-auto">
           <ProgressBar progress={progress} className="mb-4" />
-
-          {/* Step indicators */}
           <div className="flex justify-between">
             {SCAN_STEPS.map((step, index) => {
               const isComplete = index < currentStep;
@@ -301,13 +332,13 @@ export const ScanningScreen = ({ onComplete, onCancel, photos, questionnaire }: 
               return (
                 <div key={step.label} className="flex flex-col items-center">
                   <div className={cn(
-                    "w-9 h-9 rounded-full flex items-center justify-center transition-all border-2",
+                    "w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 border-2",
                     isComplete ? "bg-primary border-primary text-primary-foreground" :
-                    isActive ? "bg-primary/10 border-primary text-primary" :
-                    "bg-secondary border-transparent text-muted-foreground"
+                    isActive ? "bg-primary/12 border-primary text-primary" :
+                    "bg-secondary/60 border-transparent text-muted-foreground/50"
                   )}>
                     {isComplete ? (
-                      <span className="text-xs font-bold">✓</span>
+                      <span className="text-xs font-bold">&#10003;</span>
                     ) : (
                       <StepIcon className="w-4 h-4" />
                     )}
@@ -316,9 +347,9 @@ export const ScanningScreen = ({ onComplete, onCancel, photos, questionnaire }: 
               );
             })}
           </div>
-
         </div>
       </div>
+      <div className="safe-area-bottom flex-shrink-0" />
     </div>
   );
 };

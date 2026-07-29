@@ -1,4 +1,4 @@
-// Database types for HairlineScan app
+// Database types for HairMaxx app
 
 export interface Profile {
   id: string;
@@ -21,6 +21,27 @@ export interface UserPreferences {
   measurement_unit: 'metric' | 'imperial';
 }
 
+export interface DetailedObservation {
+  area: string;
+  observation: string;
+  severity: string;
+}
+
+export interface HairCareStep {
+  step_number: number;
+  title: string;
+  description: string;
+  products?: string[];
+  frequency: string;
+}
+
+export interface RecommendedAction {
+  priority: string;
+  action: string;
+  description: string;
+  timeframe: string;
+}
+
 export interface Scan {
   id: string;
   user_id: string;
@@ -40,6 +61,24 @@ export interface Scan {
   metrics: ScanMetrics;
   is_favorite: boolean;
   notes: string | null;
+  // Rich analysis data
+  norwood_scale: number | null;
+  norwood_description: string | null;
+  detailed_observations: DetailedObservation[] | null;
+  metrics_data: { label: string; value: number; description: string }[] | null;
+  risk_factors: string[] | null;
+  positive_signs: string[] | null;
+  hair_care_routine: HairCareStep[] | null;
+  recommended_actions: RecommendedAction[] | null;
+  should_see_dermatologist: boolean | null;
+  dermatologist_reason: string | null;
+  photos_analyzed: number | null;
+  // Deep analysis
+  follicular_analysis: { density_estimate: string; miniaturization_ratio: string; terminal_to_vellus: string; description: string } | null;
+  scalp_condition: { health: string; issues: string[]; recommendations: string[] } | null;
+  age_comparison: string | null;
+  prognosis: { short_term: string; long_term: string; preventability: string } | null;
+  lifestyle_impact: { diet_impact: string; stress_impact: string; sleep_impact: string; exercise_impact: string; overall_grade: string } | null;
 }
 
 export interface ScanMetrics {
@@ -52,10 +91,10 @@ export interface ScanMetrics {
 
 export interface QuestionnaireData {
   ageRange: string;
-  styleTime: string;
-  familyStyle: string;
-  stylingFreq: string;
-  careRoutine: string;
+  recentChanges: string;
+  familyHistory: string;
+  sheddingLevel: string;
+  scalpIssues: string;
 }
 
 export interface ScanComparison {

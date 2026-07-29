@@ -1,17 +1,17 @@
-import { useState, useRef, useEffect } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { useScanHistory } from "@/hooks/useScanHistory";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useLocalScans } from "@/hooks/useLocalScans";
+import { useScanCredit } from "@/hooks/useScanCredit";
 
 // Screens
-import { HomeScreen } from "@/components/screens/HomeScreen";
-import { LandingScreen } from "@/components/screens/LandingScreen";
-import { AuthScreen } from "@/components/screens/AuthScreen";
+import { ScanTabScreen } from "@/components/screens/ScanTabScreen";
+import { DailyScreen } from "@/components/screens/DailyScreen";
+import { CoachScreen } from "@/components/screens/CoachScreen";
 import { OnboardingScreen } from "@/components/screens/OnboardingScreen";
 import { CaptureScreen, CapturedPhotos } from "@/components/screens/CaptureScreen";
 import { ScanningScreen } from "@/components/screens/ScanningScreen";
 import { ResultsScreen } from "@/components/screens/ResultsScreen";
-import { HistoryScreen } from "@/components/screens/HistoryScreen";
 import { SettingsScreen } from "@/components/screens/SettingsScreen";
+import { PaywallScreen } from "@/components/screens/PaywallScreen";
 
 // Components
 import { BottomNav, TabType } from "@/components/BottomNav";
@@ -20,73 +20,95 @@ import { AnalysisResult } from "@/types/analysis";
 import { Scan } from "@/types/database";
 
 type AppScreen =
-  | "home"
-  | "landing"
-  | "auth"
+  | "scan"
   | "onboarding"
   | "capture"
   | "scanning"
   | "results"
-  | "history"
+  | "daily"
+  | "coach"
   | "settings"
-  | "view-scan";
+  | "view-scan"
+  | "paywall";
 
 interface AnalysisData {
   photos: CapturedPhotos;
   questionnaire: QuestionnaireData;
 }
 
-const ONBOARDING_KEY = "hairlinescan_onboarding_complete";
+const ONBOARDING_KEY = "hairmaxx_onboarding_complete";
+const SCAN_DONE_KEY = "hairmaxx_scan_completed";
 
 const Index = () => {
-  const { user, loading: authLoading } = useAuth();
-  const { saveScanFromAnalysis } = useScanHistory();
+  const {
+    scans: localScans,
+    loaded: scansLoaded,
+    saveScanFromAnalysis,
+    toggleFavorite,
+    deleteScan: deleteLocalScan,
+    clearAll: clearAllScans,
+  } = useLocalScans();
 
-  // Screen state
-  const [screen, setScreen] = useState<AppScreen>("home");
-  const [activeTab, setActiveTab] = useState<TabType>("home");
+  const [screen, setScreen] = useState<AppScreen>("scan");
+  const [activeTab, setActiveTab] = useState<TabType>("scan");
   const [previousScreen, setPreviousScreen] = useState<AppScreen | null>(null);
 
-  // Analysis state
-  const [riskScore, setRiskScore] = useState<number>(0);
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [selectedScan, setSelectedScan] = useState<Scan | null>(null);
+  const [hasScanned, setHasScanned] = useState(() => {
+    try {
+      // Check current key first, then migrate from legacy key
+      if (localStorage.getItem(SCAN_DONE_KEY) === "true") return true;
+      if (localStorage.getItem("hairlinescan_scan_completed") === "true") {
+        localStorage.setItem(SCAN_DONE_KEY, "true");
+        localStorage.removeItem("hairlinescan_scan_completed");
+        return true;
+      }
+      return false;
+    } catch { return false; }
+  });
 
-  // Camera stream ref
+  const { hasCredit, isLoading: purchaseLoading, error: purchaseError, purchase, restore, consumeCredit } = useScanCredit();
+  const [pendingPaywall, setPendingPaywall] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+
   const streamRef = useRef<MediaStream | null>(null);
-
-  // Check onboarding status
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    // Check if user has completed onboarding
-    const hasCompletedOnboarding = localStorage.getItem(ONBOARDING_KEY);
-    if (!hasCompletedOnboarding && !authLoading) {
+    try {
+      // Check current key first, then migrate from legacy key
+      if (localStorage.getItem(ONBOARDING_KEY)) return;
+      if (localStorage.getItem("hairlinescan_onboarding_complete")) {
+        localStorage.setItem(ONBOARDING_KEY, "true");
+        localStorage.removeItem("hairlinescan_onboarding_complete");
+        return;
+      }
       setShowOnboarding(true);
+    } catch {
+      // localStorage unavailable (private browsing) — skip onboarding check
     }
-  }, [authLoading]);
+  }, []);
 
-  // Handle tab changes
+  // If view-scan screen has no selected scan, navigate back
+  useEffect(() => {
+    if (screen === "view-scan" && !selectedScan) {
+      setScreen("scan");
+      setActiveTab("scan");
+    }
+  }, [screen, selectedScan]);
+
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     switch (tab) {
-      case "home":
-        setScreen("home");
-        break;
-      case "scan":
-        setScreen("capture");
-        break;
-      case "history":
-        setScreen("history");
-        break;
-      case "settings":
-        setScreen("settings");
-        break;
+      case "scan": setScreen("scan"); break;
+      case "daily": setScreen("daily"); break;
+      case "coach": setScreen("coach"); break;
+      case "settings": setScreen("settings"); break;
     }
   };
 
-  // Navigation handlers
   const handleStartScan = () => {
     setPreviousScreen(screen);
     setScreen("capture");
@@ -95,19 +117,31 @@ const Index = () => {
 
   const handleAnalyze = (photos: CapturedPhotos, questionnaire: QuestionnaireData) => {
     setAnalysisData({ photos, questionnaire });
+    if (!hasCredit) {
+      setPendingPaywall(true);
+    }
     setScreen("scanning");
   };
 
-  const handleScanComplete = async (score: number, result?: AnalysisResult) => {
-    setRiskScore(score);
-    setAnalysisResult(result || null);
+  const handleScanComplete = (result: AnalysisResult) => {
+    setAnalysisResult(result);
 
-    // Save scan to history if user is logged in
-    if (result && analysisData) {
-      await saveScanFromAnalysis(
+    // Consume one scan credit on a successful, completed analysis. Failures
+    // bail out before this handler runs, so users only pay for scans they got.
+    consumeCredit();
+
+    // Unlock Daily & Coach tabs
+    if (!hasScanned) {
+      try { localStorage.setItem(SCAN_DONE_KEY, "true"); } catch { /* private browsing */ }
+      setHasScanned(true);
+    }
+
+    // Always save scan locally
+    if (analysisData) {
+      saveScanFromAnalysis(
         result,
-        analysisData.questionnaire as any,
-        analysisData.photos.front
+        analysisData.questionnaire,
+        analysisData.photos
       );
     }
 
@@ -115,16 +149,62 @@ const Index = () => {
   };
 
   const handleRestart = () => {
-    setScreen("home");
-    setActiveTab("home");
-    setRiskScore(0);
+    setScreen("scan");
+    setActiveTab("scan");
+    setAnalysisData(null);
+    setAnalysisResult(null);
+    setSelectedScan(null);
+    setPendingPaywall(false);
+  };
+
+  const handleViewCoach = () => {
+    setScreen("coach");
+    setActiveTab("coach");
     setAnalysisData(null);
     setAnalysisResult(null);
     setSelectedScan(null);
   };
 
   const handleCancelScanning = () => {
+    setAnalysisData(null);
+    setAnalysisResult(null);
+    setPendingPaywall(false);
     setScreen("capture");
+  };
+
+  const handlePaywallNeeded = useCallback(() => {
+    setScreen("paywall");
+  }, []);
+
+  const handlePaywallUnlock = async () => {
+    const success = await purchase();
+    if (success) {
+      setPendingPaywall(false);
+      setScreen("scanning"); // Now runs real analysis
+    }
+  };
+
+  const [restoreMessage, setRestoreMessage] = useState<string | null>(null);
+
+  const handlePaywallRestore = async () => {
+    setIsRestoring(true);
+    setRestoreMessage(null);
+    const success = await restore();
+    setIsRestoring(false);
+    if (success) {
+      setPendingPaywall(false);
+      setScreen("scanning");
+    } else {
+      setRestoreMessage("No restorable purchases found. Per-scan purchases are one-time and cannot be restored. If you previously subscribed and believe this is an error, please contact support.");
+    }
+  };
+
+  const handlePaywallClose = () => {
+    setPendingPaywall(false);
+    setAnalysisData(null);
+    setAnalysisResult(null);
+    setScreen("scan");
+    setActiveTab("scan");
   };
 
   const handleCancel = () => {
@@ -132,71 +212,59 @@ const Index = () => {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
-    setScreen(previousScreen || "home");
-    setActiveTab("home");
+    const returnScreen = previousScreen || "scan";
+    setScreen(returnScreen);
+    // Restore the correct tab based on where we came from
+    if (returnScreen === "daily") setActiveTab("daily");
+    else if (returnScreen === "coach") setActiveTab("coach");
+    else setActiveTab("scan");
     setAnalysisData(null);
     setAnalysisResult(null);
   };
 
   const handleViewScan = (scan: Scan) => {
     setSelectedScan(scan);
-    // Convert Scan to AnalysisResult format
+    // Convert Scan to AnalysisResult format (legacy scans may not have new fields)
     const result: AnalysisResult = {
       score: scan.score,
       confidence: scan.confidence,
       summary: scan.summary,
       observations: scan.observations,
-      likely_patterns: scan.likely_patterns,
-      general_options: [
-        {
-          title: "Grooming Tips",
-          bullets: scan.personalized_tips.slice(0, 3)
-        }
-      ],
       disclaimer: "This cosmetic analysis is for entertainment purposes only.",
+      norwood_scale: scan.norwood_scale ?? 2,
+      norwood_description: scan.norwood_description ?? "",
+      detailed_observations: scan.detailed_observations ?? [],
+      metrics: scan.metrics_data ?? [],
+      risk_factors: scan.risk_factors ?? [],
+      positive_signs: scan.positive_signs ?? [],
+      hair_care_routine: scan.hair_care_routine ?? [],
+      recommended_actions: scan.recommended_actions ?? [],
+      should_see_dermatologist: scan.should_see_dermatologist ?? false,
+      dermatologist_reason: scan.dermatologist_reason ?? "",
+      photos_analyzed: scan.photos_analyzed ?? 1,
       hairline_type: scan.hairline_type || undefined,
       hairline_description: scan.hairline_description || undefined,
-      personalized_tips: scan.personalized_tips
+      personalized_tips: scan.personalized_tips,
+      follicular_analysis: scan.follicular_analysis || undefined,
+      scalp_condition: scan.scalp_condition || undefined,
+      age_comparison: scan.age_comparison || undefined,
+      prognosis: scan.prognosis || undefined,
+      lifestyle_impact: scan.lifestyle_impact || undefined,
     };
     setAnalysisResult(result);
-    setRiskScore(scan.score);
     setScreen("view-scan");
   };
 
-  const handleSignIn = () => {
-    setPreviousScreen(screen);
-    setScreen("auth");
-  };
-
-  const handleAuthSuccess = () => {
-    setScreen(previousScreen || "home");
-    setActiveTab("home");
-  };
-
-  const handleAuthBack = () => {
-    setScreen(previousScreen || "home");
-  };
-
   const handleOnboardingComplete = () => {
-    localStorage.setItem(ONBOARDING_KEY, "true");
+    try { localStorage.setItem(ONBOARDING_KEY, "true"); } catch { /* private browsing */ }
     setShowOnboarding(false);
   };
 
   const handleOnboardingSkip = () => {
-    localStorage.setItem(ONBOARDING_KEY, "true");
+    try { localStorage.setItem(ONBOARDING_KEY, "true"); } catch { /* private browsing */ }
     setShowOnboarding(false);
   };
 
-  // Show loading state while checking auth
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  // Show onboarding for first-time users
   if (showOnboarding) {
     return (
       <OnboardingScreen
@@ -206,85 +274,95 @@ const Index = () => {
     );
   }
 
-  // Determine if we should show the bottom nav
-  const showBottomNav = ["home", "history", "settings"].includes(screen);
+  const showBottomNav = ["scan", "daily", "coach", "settings"].includes(screen);
 
   return (
-    <main className="min-h-screen">
-      {/* Home Screen */}
-      {screen === "home" && (
-        <HomeScreen
+    <main className="h-[100dvh] overflow-hidden">
+      {screen === "scan" && (
+        <ScanTabScreen
           onStartScan={handleStartScan}
-          onViewHistory={() => handleTabChange("history")}
           onViewScan={handleViewScan}
-          onSignIn={handleSignIn}
+          scans={localScans}
         />
       )}
 
-      {/* Auth Screen */}
-      {screen === "auth" && (
-        <AuthScreen onBack={handleAuthBack} onSuccess={handleAuthSuccess} />
+      {screen === "daily" && (
+        <DailyScreen
+          onViewScan={handleViewScan}
+          onNewScan={handleStartScan}
+          scans={localScans}
+          onToggleFavorite={toggleFavorite}
+          onDeleteScan={deleteLocalScan}
+        />
       )}
 
-      {/* Capture Screen */}
+      {screen === "coach" && (
+        <CoachScreen
+          onNewScan={handleStartScan}
+          scans={localScans}
+        />
+      )}
+
       {screen === "capture" && (
         <CaptureScreen
           onAnalyze={handleAnalyze}
           onCancel={handleCancel}
           streamRef={streamRef}
+          skipQuestionnaire={localScans.length > 0}
         />
       )}
 
-      {/* Scanning Screen */}
       {screen === "scanning" && (
         <ScanningScreen
           onComplete={handleScanComplete}
           onCancel={handleCancelScanning}
           photos={analysisData?.photos}
           questionnaire={analysisData?.questionnaire}
+          previewOnly={pendingPaywall}
+          onPaywallNeeded={handlePaywallNeeded}
         />
       )}
 
-      {/* Results Screen */}
+      {screen === "paywall" && (
+        <PaywallScreen
+          onClose={handlePaywallClose}
+          onUnlock={handlePaywallUnlock}
+          onRestore={handlePaywallRestore}
+          isLoading={purchaseLoading}
+          isRestoring={isRestoring}
+          error={purchaseError}
+          restoreMessage={restoreMessage}
+        />
+      )}
+
       {screen === "results" && (
         <ResultsScreen
-          score={riskScore}
           analysis={analysisResult}
           onRestart={handleRestart}
+          onViewCoach={handleViewCoach}
           photo={analysisData?.photos?.front}
         />
       )}
 
-      {/* View Saved Scan Screen */}
       {screen === "view-scan" && selectedScan && (
         <ResultsScreen
-          score={selectedScan.score}
           analysis={analysisResult}
           onRestart={handleRestart}
+          onViewCoach={handleViewCoach}
           photo={selectedScan.photo_front_url || undefined}
           savedScan={selectedScan}
         />
       )}
 
-      {/* History Screen */}
-      {screen === "history" && (
-        <HistoryScreen
-          onViewScan={handleViewScan}
-          onNewScan={handleStartScan}
-        />
-      )}
-
-      {/* Settings Screen */}
       {screen === "settings" && (
-        <SettingsScreen onNavigateToAuth={handleSignIn} />
+        <SettingsScreen scans={localScans} onClearData={clearAllScans} />
       )}
 
-      {/* Bottom Navigation */}
       {showBottomNav && (
         <BottomNav
           activeTab={activeTab}
           onTabChange={handleTabChange}
-          isAuthenticated={!!user}
+          lockedTabs={[]}
         />
       )}
     </main>

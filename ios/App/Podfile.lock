@@ -5,6 +5,12 @@ PODS:
     - Capacitor
     - SDWebImage
   - CapacitorCordova (6.2.1)
+  - PurchasesHybridCommon (13.26.0):
+    - RevenueCat (= 5.20.0)
+  - RevenueCat (5.20.0)
+  - RevenuecatPurchasesCapacitor (9.2.2):
+    - Capacitor
+    - PurchasesHybridCommon (= 13.26.0)
   - SDWebImage (5.21.6):
     - SDWebImage/Core (= 5.21.6)
   - SDWebImage/Core (5.21.6)
@@ -13,9 +19,12 @@ DEPENDENCIES:
   - "Capacitor (from `../../node_modules/@capacitor/ios`)"
   - "CapacitorCommunityMedia (from `../../node_modules/@capacitor-community/media`)"
   - "CapacitorCordova (from `../../node_modules/@capacitor/ios`)"
+  - "RevenuecatPurchasesCapacitor (from `../../node_modules/@revenuecat/purchases-capacitor`)"
 
 SPEC REPOS:
   trunk:
+    - PurchasesHybridCommon
+    - RevenueCat
     - SDWebImage
 
 EXTERNAL SOURCES:
@@ -25,13 +34,18 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/@capacitor-community/media"
   CapacitorCordova:
     :path: "../../node_modules/@capacitor/ios"
+  RevenuecatPurchasesCapacitor:
+    :path: "../../node_modules/@revenuecat/purchases-capacitor"
 
 SPEC CHECKSUMS:
   Capacitor: c95400d761e376be9da6be5a05f226c0e865cebf
   CapacitorCommunityMedia: 7ed0fb7688872e482fc78d286a3ef9ba94035c71
   CapacitorCordova: 8d93e14982f440181be7304aa9559ca631d77fff
+  PurchasesHybridCommon: fa166fc8b385cf80f581f923c91d8ccffe5dd7f8
+  RevenueCat: e47ff90dfd271fde155a4befe48e8fc02e8281e4
+  RevenuecatPurchasesCapacitor: 6727a4dc1455bdf2374259420719ce5dfbe957fa
   SDWebImage: 1bb6a1b84b6fe87b972a102bdc77dd589df33477
 
-PODFILE CHECKSUM: 2a82fc6f7ba29c52cf2cf0c469d4a52b179b0484
+PODFILE CHECKSUM: 992079eaf9d1b2d5d6ea4827f205af15db1cf3e3
 
 COCOAPODS: 1.16.2

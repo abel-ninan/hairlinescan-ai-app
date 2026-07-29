@@ -51,7 +51,7 @@ export class ErrorBoundary extends Component<Props, State> {
             </p>
 
             <Button
-              variant="scanner"
+              variant="default"
               size="lg"
               onClick={this.handleReload}
               className="w-full"

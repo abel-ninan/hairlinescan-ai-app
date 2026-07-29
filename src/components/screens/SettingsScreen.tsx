@@ -1,16 +1,18 @@
-import { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { useState, useCallback } from 'react';
+import { Scan } from '@/types/database';
+import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  Shield,
+  HelpCircle,
+  ChevronRight,
+  ChevronDown,
+  FileText,
+  Sparkles,
+  ArrowLeft,
+  Mail,
+  MessageCircle,
+  Trash2,
+} from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,519 +24,419 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import {
-  User,
-  Bell,
-  Moon,
-  Shield,
-  HelpCircle,
-  LogOut,
-  ChevronRight,
-  Mail,
-  Calendar,
-  Trash2,
-  Download,
-  FileText,
-  ExternalLink,
-  Loader2,
-  Sparkles,
-  Crown,
-  Star
-} from 'lucide-react';
 
 interface SettingsScreenProps {
-  onNavigateToAuth: () => void;
+  scans: Scan[];
+  onClearData: () => Promise<void>;
 }
 
-export const SettingsScreen = ({ onNavigateToAuth }: SettingsScreenProps) => {
-  const { user, profile, signOut, updateProfile } = useAuth();
-  const { toast } = useToast();
+type SettingsView = 'main' | 'privacy' | 'terms' | 'help';
 
-  const [loading, setLoading] = useState(false);
-  const [editingName, setEditingName] = useState(false);
-  const [newName, setNewName] = useState(profile?.full_name || '');
+export const SettingsScreen = ({ scans, onClearData }: SettingsScreenProps) => {
+  const [view, setView] = useState<SettingsView>('main');
+  const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
+  const goBackToMain = useCallback(() => setView('main'), []);
+  useEdgeSwipeBack(goBackToMain, view !== 'main');
 
-  const handleUpdateName = async () => {
-    if (!newName.trim()) {
-      toast({ title: 'Please enter a name', variant: 'destructive' });
-      return;
-    }
+  const faqItems = [
+    {
+      q: 'How does HairMaxx work?',
+      a: 'HairMaxx uses AI to analyze photos of your hairline and provide fun, entertaining style insights. Simply take photos and receive instant results.',
+    },
+    {
+      q: 'Is this medical advice?',
+      a: 'No. HairMaxx is for entertainment purposes only and does NOT provide medical advice, diagnosis, or treatment. Always consult a qualified healthcare professional for health concerns.',
+    },
+    {
+      q: 'Are my photos stored?',
+      a: 'Photos are processed temporarily for analysis and are not permanently stored on our servers. Scan results are saved locally on your device only.',
+    },
+    {
+      q: 'Why did my analysis fail?',
+      a: 'This can happen due to poor lighting, blurry photos, or temporary server issues. Try retaking photos in good lighting and ensure your hairline is clearly visible.',
+    },
+    {
+      q: 'How do I get the best results?',
+      a: 'Use good lighting (natural light works best), hold the camera steady, and make sure your hairline is clearly visible in the photo.',
+    },
+    {
+      q: 'How much does a scan cost?',
+      a: 'Each scan is a one-time $4.99 purchase. There is no subscription and nothing auto-renews. You only pay when you choose to scan.',
+    },
+    {
+      q: 'Are scans refundable?',
+      a: 'A scan credit is granted at purchase and consumed only when an analysis completes successfully. If a scan fails, the credit is kept and you can retry. For refund requests, contact Apple via Settings > Apple ID > Subscriptions > Purchase History.',
+    },
+    {
+      q: 'I subscribed before — what happens?',
+      a: 'If you previously subscribed to HairMaxx Pro, tap "Restore Purchases" on the scan screen and you will be granted a generous credit pool. Your existing subscription can be cancelled anytime in Settings > Apple ID > Subscriptions.',
+    },
+  ];
 
-    setLoading(true);
-    const { error } = await updateProfile({ full_name: newName.trim() });
-    setLoading(false);
-
-    if (error) {
-      toast({ title: 'Error updating name', variant: 'destructive' });
-    } else {
-      toast({ title: 'Name updated' });
-      setEditingName(false);
-    }
-  };
-
-  const handleTogglePreference = async (key: string, value: boolean) => {
-    if (!profile) return;
-
-    const newPreferences = {
-      ...profile.preferences,
-      [key]: value
-    };
-
-    const { error } = await updateProfile({ preferences: newPreferences } as any);
-
-    if (error) {
-      toast({ title: 'Error updating settings', variant: 'destructive' });
-    }
-  };
-
-  const handleUpdateReminderFrequency = async (value: string) => {
-    if (!profile) return;
-
-    const newPreferences = {
-      ...profile.preferences,
-      reminder_frequency: value
-    };
-
-    const { error } = await updateProfile({ preferences: newPreferences } as any);
-
-    if (error) {
-      toast({ title: 'Error updating settings', variant: 'destructive' });
-    } else {
-      toast({ title: 'Reminder frequency updated' });
-    }
-  };
-
-  const handleExportData = async () => {
-    if (!user) return;
-
-    setLoading(true);
-    try {
-      const { data: scans, error } = await supabase
-        .from('scans')
-        .select('*')
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-
-      const exportData = {
-        profile: {
-          email: profile?.email,
-          full_name: profile?.full_name,
-          created_at: profile?.created_at,
-          scan_count: profile?.scan_count
-        },
-        scans: scans || [],
-        exported_at: new Date().toISOString()
-      };
-
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `hairlinescan-data-${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      toast({ title: 'Data exported successfully' });
-    } catch (err) {
-      console.error('Export error:', err);
-      toast({ title: 'Error exporting data', variant: 'destructive' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    // This would need server-side implementation for full account deletion
-    toast({
-      title: 'Account deletion requested',
-      description: 'Please contact support to complete account deletion.'
-    });
-  };
-
-  const handleSignOut = async () => {
-    await signOut();
-    toast({ title: 'Signed out' });
-  };
-
-  if (!user) {
+  // Sub-page: Privacy Policy
+  if (view === 'privacy') {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20 p-6 flex flex-col items-center justify-center">
-        <div className="glass-panel p-8 text-center max-w-md">
-          <User className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-          <h2 className="text-xl font-bold mb-2">Sign in to access settings</h2>
-          <p className="text-muted-foreground mb-6">
-            Create an account to save your scans, track progress, and personalize your experience.
-          </p>
-          <Button onClick={onNavigateToAuth} className="w-full">
-            Sign In / Sign Up
-          </Button>
+      <div className="h-full flex flex-col bg-background">
+        <div className="safe-area-top flex-shrink-0" />
+        <div className="px-5 pt-5 pb-3 flex-shrink-0">
+          <button
+            onClick={() => setView('main')}
+            className="flex items-center gap-2 text-primary active:opacity-60 transition-opacity min-h-[44px]"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            <span className="text-[15px] font-medium">Settings</span>
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 space-y-4">
+          <h1 className="text-2xl font-bold tracking-tight">Privacy Policy</h1>
+          <p className="text-xs text-muted-foreground">Last updated: January 28, 2026</p>
+
+          <div className="rounded-2xl bg-amber-500/10 border border-amber-500/20 p-4">
+            <p className="text-sm font-semibold text-amber-400 mb-1">Medical Disclaimer</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              HairMaxx is for entertainment purposes only. This app does NOT provide medical advice, diagnosis, or treatment. Always consult a qualified healthcare professional.
+            </p>
+          </div>
+
+          <Section title="Introduction">
+            HairMaxx is committed to protecting your privacy. This policy explains how we collect, use, and safeguard your information. HairMaxx is an entertainment app only and does not provide medical advice.
+          </Section>
+
+          <Section title="Information We Collect">
+            <b>Photos:</b> We request camera access to capture photos for AI analysis. Photos are processed temporarily and not stored permanently on our servers.{'\n\n'}
+            <b>Questionnaire Responses:</b> Optional responses are processed with your photos and not stored permanently.{'\n\n'}
+            <b>Device Information:</b> We may collect anonymous usage analytics. We do not collect personally identifiable information.
+          </Section>
+
+          <Section title="How We Use Your Information">
+            We use your information to provide AI-powered entertainment analysis, generate personalized tips, and improve our services. We do not use your information for advertising or sell your data to third parties.
+          </Section>
+
+          <Section title="Data Storage & Security">
+            Photos and questionnaire data are processed in real-time and not permanently stored. All data transmission uses HTTPS encryption. Scan results are stored locally on your device only.
+          </Section>
+
+          <Section title="Third-Party Services">
+            <b>Google Gemini AI:</b> Photos are transmitted securely for analysis. Google does not use your data for model training.{'\n\n'}
+            <b>Supabase:</b> Secure serverless functions relay requests to the AI service. No user data is stored.
+          </Section>
+
+          <Section title="Your Rights">
+            You can deny camera access, delete all local data by reinstalling the app, and contact us with privacy concerns. Photos are not stored on our servers.
+          </Section>
+
+          <Section title="Children's Privacy">
+            HairMaxx is not intended for children under 13. We do not knowingly collect information from children under 13.
+          </Section>
+
+          <Section title="Contact">
+            Questions? Email us at hairmaxxtool@gmail.com
+          </Section>
+
+          <div className="h-24 flex-shrink-0" />
         </div>
       </div>
     );
   }
 
+  // Sub-page: Terms of Service
+  if (view === 'terms') {
+    return (
+      <div className="h-full flex flex-col bg-background">
+        <div className="safe-area-top flex-shrink-0" />
+        <div className="px-5 pt-5 pb-3 flex-shrink-0">
+          <button
+            onClick={() => setView('main')}
+            className="flex items-center gap-2 text-primary active:opacity-60 transition-opacity min-h-[44px]"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            <span className="text-[15px] font-medium">Settings</span>
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 space-y-4">
+          <h1 className="text-2xl font-bold tracking-tight">Terms of Service</h1>
+          <p className="text-xs text-muted-foreground">Last updated: January 28, 2026</p>
+
+          <div className="rounded-2xl bg-amber-500/10 border border-amber-500/20 p-4">
+            <p className="text-sm font-semibold text-amber-400 mb-1">Medical Disclaimer</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              HairMaxx is an entertainment app only. It does NOT provide medical advice, diagnosis, or treatment. Always consult a qualified healthcare professional.
+            </p>
+          </div>
+
+          <Section title="1. Acceptance of Terms">
+            By downloading, installing, or using HairMaxx, you agree to be bound by these Terms of Service. If you do not agree, do not use the App.
+          </Section>
+
+          <Section title="2. Entertainment Purpose Only">
+            HairMaxx is designed purely for entertainment. The App does NOT provide medical advice, diagnosis, or treatment. It does NOT replace professional medical consultation. Scores and results are for fun only. AI may produce inaccurate or inconsistent results. It should NOT be used to make health-related decisions.
+          </Section>
+
+          <Section title="3. No Medical Claims">
+            The App makes no claims regarding accuracy of analysis, ability to detect or diagnose any condition, scientific validity of results, or effectiveness of tips provided.
+          </Section>
+
+          <Section title="4. User Responsibilities">
+            You agree that you are at least 13 years of age, you will not rely on the App for medical decisions, you understand results are entertainment only, and you will seek professional advice for health concerns.
+          </Section>
+
+          <Section title="5. In-App Purchases">
+            Each AI scan is a one-time $4.99 purchase through the App Store. There is no subscription and no auto-renewal. A scan credit is granted at purchase and is consumed when an analysis completes successfully. If an analysis fails, your credit is preserved and you can retry. Refunds are handled by Apple via Settings &gt; Apple ID &gt; Purchase History.
+          </Section>
+
+          <Section title="6. Privacy">
+            Your use of the App is also governed by our Privacy Policy. Photos are processed temporarily and not permanently stored.
+          </Section>
+
+          <Section title="7. Disclaimer of Warranties">
+            The App is provided "AS IS" without warranties. We do not warrant it will be error-free, accurate, or meet your expectations.
+          </Section>
+
+          <Section title="8. Limitation of Liability">
+            HairMaxx shall not be liable for any indirect, incidental, special, or consequential damages from your use of the App.
+          </Section>
+
+          <Section title="9. Contact">
+            Questions? Email us at hairmaxxtool@gmail.com
+          </Section>
+
+          <div className="h-24 flex-shrink-0" />
+        </div>
+      </div>
+    );
+  }
+
+  // Sub-page: Help & FAQ
+  if (view === 'help') {
+    return (
+      <div className="h-full flex flex-col bg-background">
+        <div className="safe-area-top flex-shrink-0" />
+        <div className="px-5 pt-5 pb-3 flex-shrink-0">
+          <button
+            onClick={() => setView('main')}
+            className="flex items-center gap-2 text-primary active:opacity-60 transition-opacity min-h-[44px]"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            <span className="text-[15px] font-medium">Settings</span>
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 space-y-4">
+          <h1 className="text-2xl font-bold tracking-tight">Help & FAQ</h1>
+          <p className="text-sm text-muted-foreground">Everything you need to know about HairMaxx</p>
+
+          {/* Contact card */}
+          <div className="rounded-2xl bg-card border border-border/50 p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Mail className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Need help?</p>
+                <p className="text-xs text-muted-foreground">We typically respond within 24-48 hours</p>
+              </div>
+            </div>
+            <a
+              href="mailto:hairmaxxtool@gmail.com"
+              className="block w-full text-center py-3 rounded-xl bg-primary/10 text-primary text-sm font-medium active:bg-primary/20 transition-colors"
+            >
+              Email Support
+            </a>
+          </div>
+
+          {/* FAQ */}
+          <div className="rounded-2xl bg-card border border-border/50 overflow-hidden">
+            <div className="px-4 pt-4 pb-2">
+              <h3 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                Frequently Asked Questions
+              </h3>
+            </div>
+            <div className="divide-y divide-border/30">
+              {faqItems.map((item, i) => (
+                <button
+                  key={i}
+                  onClick={() => setExpandedFaq(expandedFaq === i ? null : i)}
+                  className="w-full text-left px-4 py-3.5 active:bg-secondary/40 transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[15px] font-medium flex-1">{item.q}</span>
+                    <ChevronDown
+                      className={`w-4 h-4 text-muted-foreground/40 flex-shrink-0 transition-transform ${expandedFaq === i ? 'rotate-180' : ''}`}
+                    />
+                  </div>
+                  {expandedFaq === i && (
+                    <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{item.a}</p>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-amber-500/10 border border-amber-500/20 p-4">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              HairMaxx is for entertainment purposes only. Not medical advice. Always consult a qualified healthcare professional.
+            </p>
+          </div>
+
+          <div className="h-24 flex-shrink-0" />
+        </div>
+      </div>
+    );
+  }
+
+  // Main settings view
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20 pb-24">
+    <div className="h-full flex flex-col bg-background">
+      <div className="safe-area-top flex-shrink-0" />
+
       {/* Header */}
-      <div className="p-6 pb-4">
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">Manage your account and preferences</p>
+      <div className="px-5 pt-6 pb-4 flex-shrink-0">
+        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+        <p className="text-sm text-muted-foreground">Manage your preferences</p>
       </div>
 
-      <div className="px-6 space-y-6">
-        {/* Profile Section */}
-        <div className="glass-panel p-4">
-          <h3 className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-wider">
-            Profile
-          </h3>
-
-          <div className="space-y-4">
-            {/* Avatar & Name */}
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
-                {profile?.avatar_url ? (
-                  <img
-                    src={profile.avatar_url}
-                    alt="Avatar"
-                    className="w-full h-full rounded-full object-cover"
-                  />
-                ) : (
-                  <User className="w-8 h-8 text-primary" />
-                )}
-              </div>
-              <div className="flex-1">
-                {editingName ? (
-                  <div className="flex gap-2">
-                    <Input
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
-                      placeholder="Your name"
-                      className="flex-1"
-                    />
-                    <Button onClick={handleUpdateName} disabled={loading} size="sm">
-                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
-                    </Button>
-                    <Button
-                      onClick={() => setEditingName(false)}
-                      variant="outline"
-                      size="sm"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <p className="font-semibold">{profile?.full_name || 'No name set'}</p>
-                    <button
-                      onClick={() => {
-                        setNewName(profile?.full_name || '');
-                        setEditingName(true);
-                      }}
-                      className="text-sm text-primary hover:underline"
-                    >
-                      Edit name
-                    </button>
-                  </>
-                )}
-              </div>
+      <div className="flex-1 overflow-y-auto px-5 space-y-5">
+        {/* App Info Card */}
+        <div className="rounded-2xl bg-card border border-border/50 p-5">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/20 to-blue-500/10 flex items-center justify-center ring-1 ring-primary/20">
+              <Sparkles className="w-7 h-7 text-primary" />
             </div>
-
-            {/* Email */}
-            <div className="flex items-center justify-between py-2">
-              <div className="flex items-center gap-3">
-                <Mail className="w-5 h-5 text-muted-foreground" />
-                <span className="text-sm">{profile?.email}</span>
-              </div>
-            </div>
-
-            {/* Member Since */}
-            <div className="flex items-center justify-between py-2">
-              <div className="flex items-center gap-3">
-                <Calendar className="w-5 h-5 text-muted-foreground" />
-                <span className="text-sm">
-                  Member since{' '}
-                  {profile?.created_at
-                    ? new Date(profile.created_at).toLocaleDateString('en-US', {
-                        month: 'long',
-                        year: 'numeric'
-                      })
-                    : 'N/A'}
-                </span>
-              </div>
-            </div>
-
-            {/* Scan Count */}
-            <div className="flex items-center justify-between py-2">
-              <div className="flex items-center gap-3">
-                <Sparkles className="w-5 h-5 text-muted-foreground" />
-                <span className="text-sm">{profile?.scan_count || 0} total scans</span>
-              </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-lg tracking-tight">HairMaxx</h3>
+              <p className="text-sm text-muted-foreground">{scans.length} scan{scans.length !== 1 ? 's' : ''} on this device</p>
             </div>
           </div>
         </div>
 
-        {/* Premium Section */}
-        <div className="glass-panel p-4 border-primary/30">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-yellow-500 to-orange-500 flex items-center justify-center">
-                <Crown className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="font-semibold">Upgrade to Premium</p>
-                <p className="text-sm text-muted-foreground">
-                  Unlock detailed reports & comparisons
-                </p>
-              </div>
-            </div>
-            <ChevronRight className="w-5 h-5 text-muted-foreground" />
+        {/* Legal Section */}
+        <div className="rounded-2xl bg-card border border-border/50 overflow-hidden">
+          <div className="px-4 pt-4 pb-2">
+            <h3 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              Legal
+            </h3>
           </div>
-        </div>
 
-        {/* Notifications Section */}
-        <div className="glass-panel p-4">
-          <h3 className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-wider">
-            Notifications
-          </h3>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Bell className="w-5 h-5 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">Push Notifications</p>
-                  <p className="text-sm text-muted-foreground">Get reminders and updates</p>
-                </div>
-              </div>
-              <Switch
-                checked={profile?.preferences?.notifications_enabled ?? true}
-                onCheckedChange={(checked) =>
-                  handleTogglePreference('notifications_enabled', checked)
-                }
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Calendar className="w-5 h-5 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">Scan Reminders</p>
-                  <p className="text-sm text-muted-foreground">Regular check-in reminders</p>
-                </div>
-              </div>
-              <Switch
-                checked={profile?.preferences?.scan_reminders ?? true}
-                onCheckedChange={(checked) =>
-                  handleTogglePreference('scan_reminders', checked)
-                }
-              />
-            </div>
-
-            {profile?.preferences?.scan_reminders && (
-              <div className="flex items-center justify-between pl-8">
-                <p className="text-sm">Reminder Frequency</p>
-                <Select
-                  value={profile?.preferences?.reminder_frequency || 'weekly'}
-                  onValueChange={handleUpdateReminderFrequency}
-                >
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="daily">Daily</SelectItem>
-                    <SelectItem value="weekly">Weekly</SelectItem>
-                    <SelectItem value="monthly">Monthly</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <FileText className="w-5 h-5 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">Weekly Reports</p>
-                  <p className="text-sm text-muted-foreground">Progress summary emails</p>
-                </div>
-              </div>
-              <Switch
-                checked={profile?.preferences?.weekly_reports ?? true}
-                onCheckedChange={(checked) =>
-                  handleTogglePreference('weekly_reports', checked)
-                }
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Appearance Section */}
-        <div className="glass-panel p-4">
-          <h3 className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-wider">
-            Appearance
-          </h3>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Moon className="w-5 h-5 text-muted-foreground" />
-              <div>
-                <p className="font-medium">Dark Mode</p>
-                <p className="text-sm text-muted-foreground">Use dark theme</p>
-              </div>
-            </div>
-            <Switch
-              checked={profile?.preferences?.dark_mode ?? true}
-              onCheckedChange={(checked) =>
-                handleTogglePreference('dark_mode', checked)
-              }
-            />
-          </div>
-        </div>
-
-        {/* Data & Privacy Section */}
-        <div className="glass-panel p-4">
-          <h3 className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-wider">
-            Data & Privacy
-          </h3>
-
-          <div className="space-y-2">
+          <div className="divide-y divide-border/30">
             <button
-              onClick={handleExportData}
-              disabled={loading}
-              className="w-full flex items-center justify-between py-3 hover:bg-secondary/50 rounded-lg px-2 transition-colors"
+              onClick={() => setView('privacy')}
+              className="w-full flex items-center justify-between py-3.5 px-4 active:bg-secondary/40 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <Download className="w-5 h-5 text-muted-foreground" />
-                <span>Export My Data</span>
+                <Shield className="w-[18px] h-[18px] text-muted-foreground" />
+                <span className="text-[15px]">Privacy Policy</span>
               </div>
-              {loading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
-              )}
+              <ChevronRight className="w-4 h-4 text-muted-foreground/30" />
             </button>
 
-            <a
-              href="/privacy-policy.html"
-              target="_blank"
-              className="w-full flex items-center justify-between py-3 hover:bg-secondary/50 rounded-lg px-2 transition-colors"
+            <button
+              onClick={() => setView('terms')}
+              className="w-full flex items-center justify-between py-3.5 px-4 active:bg-secondary/40 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <Shield className="w-5 h-5 text-muted-foreground" />
-                <span>Privacy Policy</span>
+                <FileText className="w-[18px] h-[18px] text-muted-foreground" />
+                <span className="text-[15px]">Terms of Service</span>
               </div>
-              <ExternalLink className="w-5 h-5 text-muted-foreground" />
-            </a>
-
-            <a
-              href="/terms.html"
-              target="_blank"
-              className="w-full flex items-center justify-between py-3 hover:bg-secondary/50 rounded-lg px-2 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <FileText className="w-5 h-5 text-muted-foreground" />
-                <span>Terms of Service</span>
-              </div>
-              <ExternalLink className="w-5 h-5 text-muted-foreground" />
-            </a>
+              <ChevronRight className="w-4 h-4 text-muted-foreground/30" />
+            </button>
           </div>
         </div>
 
         {/* Support Section */}
-        <div className="glass-panel p-4">
-          <h3 className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-wider">
-            Support
-          </h3>
+        <div className="rounded-2xl bg-card border border-border/50 overflow-hidden">
+          <div className="px-4 pt-4 pb-2">
+            <h3 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              Support
+            </h3>
+          </div>
 
-          <div className="space-y-2">
+          <div className="divide-y divide-border/30">
+            <button
+              onClick={() => setView('help')}
+              className="w-full flex items-center justify-between py-3.5 px-4 active:bg-secondary/40 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <HelpCircle className="w-[18px] h-[18px] text-muted-foreground" />
+                <span className="text-[15px]">Help & FAQ</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground/30" />
+            </button>
+
             <a
-              href="/support.html"
-              target="_blank"
-              className="w-full flex items-center justify-between py-3 hover:bg-secondary/50 rounded-lg px-2 transition-colors"
+              href="mailto:hairmaxxtool@gmail.com"
+              className="w-full flex items-center justify-between py-3.5 px-4 active:bg-secondary/40 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <HelpCircle className="w-5 h-5 text-muted-foreground" />
-                <span>Help & FAQ</span>
+                <MessageCircle className="w-[18px] h-[18px] text-muted-foreground" />
+                <span className="text-[15px]">Contact Us</span>
               </div>
-              <ExternalLink className="w-5 h-5 text-muted-foreground" />
+              <ChevronRight className="w-4 h-4 text-muted-foreground/30" />
             </a>
-
-            <button
-              onClick={() => {
-                // Would open app store review prompt
-                toast({ title: 'Thanks for your support!' });
-              }}
-              className="w-full flex items-center justify-between py-3 hover:bg-secondary/50 rounded-lg px-2 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <Star className="w-5 h-5 text-muted-foreground" />
-                <span>Rate the App</span>
-              </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
-            </button>
           </div>
         </div>
 
-        {/* Danger Zone */}
-        <div className="glass-panel p-4 border-destructive/30">
-          <h3 className="text-sm font-medium text-destructive mb-4 uppercase tracking-wider">
-            Danger Zone
-          </h3>
-
-          <div className="space-y-2">
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <button className="w-full flex items-center justify-between py-3 hover:bg-destructive/10 rounded-lg px-2 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <Trash2 className="w-5 h-5 text-destructive" />
-                    <span className="text-destructive">Delete Account</span>
-                  </div>
-                </button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete Account?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This action cannot be undone. All your data, including scan history
-                    and progress, will be permanently deleted.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDeleteAccount}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
-                    Delete Account
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-
-            <button
-              onClick={handleSignOut}
-              className="w-full flex items-center justify-between py-3 hover:bg-secondary/50 rounded-lg px-2 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <LogOut className="w-5 h-5 text-muted-foreground" />
-                <span>Sign Out</span>
-              </div>
-            </button>
+        {/* Data Section */}
+        {scans.length > 0 && (
+          <div className="rounded-2xl bg-card border border-border/50 overflow-hidden">
+            <div className="px-4 pt-4 pb-2">
+              <h3 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                Data
+              </h3>
+            </div>
+            <div className="divide-y divide-border/30">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button className="w-full flex items-center justify-between py-3.5 px-4 active:bg-secondary/40 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <Trash2 className="w-[18px] h-[18px] text-destructive/70" />
+                      <span className="text-[15px] text-destructive/90">Clear All Data</span>
+                    </div>
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Clear all data?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete all {scans.length} scan{scans.length !== 1 ? 's' : ''} from this device. This cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={onClearData}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Delete All
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* App Version */}
         <div className="text-center py-4">
-          <p className="text-sm text-muted-foreground">
-            HairlineScan v1.2.0
+          <p className="text-sm text-muted-foreground/60 font-medium">
+            HairMaxx v1.3.1
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground/30 mt-1">
             Made with care for your hair
           </p>
         </div>
+
+        {/* Spacer for bottom nav */}
+        <div className="h-24 flex-shrink-0" />
       </div>
     </div>
   );
 };
+
+// Simple section component for policy/terms pages
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl bg-card border border-border/50 p-4">
+      <h3 className="text-sm font-semibold mb-2">{title}</h3>
+      <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">{children}</p>
+    </div>
+  );
+}

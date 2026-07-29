@@ -62,3 +62,8 @@ serviceAccountKey.json
 *.app
 *.dSYM.zip
 *.dSYM
+*.xcarchive
+build/
+
+# Browser-automation scratch output
+.playwright-mcp/

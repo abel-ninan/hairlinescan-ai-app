@@ -3,10 +3,12 @@ import { AnalysisResult } from "@/types/analysis";
 import { CapturedPhotos } from "@/components/screens/CaptureScreen";
 import { QuestionnaireData } from "@/components/Questionnaire";
 import { supabase } from "@/integrations/supabase/client";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
 
-const MAX_PAYLOAD_SIZE = 1.5 * 1024 * 1024; // 1.5MB
+const MAX_PAYLOAD_SIZE = 4 * 1024 * 1024; // 4MB
 const COOLDOWN_KEY = 'hairline_last_analyze_at';
-const MIN_COOLDOWN_MS = 20000; // 20 seconds
+const MIN_COOLDOWN_MS = 10000; // 10 seconds
 
 export type ErrorType = 'payload_too_large' | 'rate_limit' | 'server_error' | 'network_error' | 'cooldown';
 
@@ -14,7 +16,6 @@ interface UseAnalysisReturn {
   isAnalyzing: boolean;
   error: string | null;
   errorType: ErrorType | null;
-  usedFallback: boolean;
   usedSinglePhoto: boolean;
   cooldownRemaining: number;
   rateLimitWait: number;
@@ -61,52 +62,6 @@ function getDataUrlSize(dataUrl: string): number {
   return Math.ceil((base64.length * 3) / 4);
 }
 
-// Generate cosmetic analysis result - used when AI is unavailable
-function generateFallbackResult(): AnalysisResult {
-  const score = 2 + Math.random() * 3; // 2-5 range for positive results
-  const hairlineTypes = ["Classic", "Mature", "Rounded", "Angular", "Straight"];
-  const randomType = hairlineTypes[Math.floor(Math.random() * hairlineTypes.length)];
-
-  const summaries = [
-    "Your hairline displays balanced proportions with natural characteristics.",
-    "Analysis indicates well-defined features with good overall symmetry.",
-    "Your profile shows distinctive characteristics with natural variation.",
-    "The analysis reveals a structured hairline with defined edges.",
-    "Your hairline presents classic proportions with good definition."
-  ];
-  const randomSummary = summaries[Math.floor(Math.random() * summaries.length)];
-
-  return {
-    score: Math.round(score * 10) / 10,
-    confidence: 0.75,
-    summary: randomSummary,
-    observations: [
-      "Natural hairline pattern detected",
-      "Symmetrical features observed",
-      "Well-defined structure noted"
-    ],
-    likely_patterns: ["Natural Pattern", "Balanced Profile"],
-    general_options: [
-      {
-        title: "Grooming Recommendations",
-        bullets: [
-          "Quality hair products can enhance natural appearance",
-          "Regular grooming maintains a polished look",
-          "Consider styles that complement your natural hairline"
-        ]
-      }
-    ],
-    disclaimer: "This cosmetic analysis is for entertainment purposes only and is not a professional assessment.",
-    hairline_type: randomType,
-    hairline_description: "A common hairline classification based on visual characteristics.",
-    personalized_tips: [
-      "Consider products that add volume and texture",
-      "A professional stylist can recommend flattering cuts",
-      "Regular maintenance keeps your look sharp"
-    ]
-  };
-}
-
 // Get last analyze timestamp from localStorage
 function getLastAnalyzeAt(): number {
   try {
@@ -130,13 +85,20 @@ export function useAnalysis(): UseAnalysisReturn {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorType, setErrorType] = useState<ErrorType | null>(null);
-  const [usedFallback, setUsedFallback] = useState(false);
   const [usedSinglePhoto, setUsedSinglePhoto] = useState(false);
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const [rateLimitWait, setRateLimitWait] = useState(0);
-  
+
   const inFlightRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
   const lastRequestRef = useRef<{ photos: CapturedPhotos; questionnaire: QuestionnaireData } | null>(null);
+
+  // Abort in-flight request on unmount
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   // Update cooldown countdown
   useEffect(() => {
@@ -155,18 +117,17 @@ export function useAnalysis(): UseAnalysisReturn {
   // Update rate limit countdown
   useEffect(() => {
     if (rateLimitWait <= 0) return;
-    
+
     const interval = setInterval(() => {
       setRateLimitWait(prev => Math.max(0, prev - 1));
     }, 1000);
-    
+
     return () => clearInterval(interval);
   }, [rateLimitWait]);
 
   const clearError = useCallback(() => {
     setError(null);
     setErrorType(null);
-    setUsedFallback(false);
     setRateLimitWait(0);
   }, []);
 
@@ -175,7 +136,7 @@ export function useAnalysis(): UseAnalysisReturn {
     questionnaire: QuestionnaireData
   ): Promise<AnalysisResult | null> => {
     // Prevent double-clicks and re-entry
-    if (inFlightRef.current || isAnalyzing) {
+    if (inFlightRef.current) {
       return null;
     }
 
@@ -189,22 +150,31 @@ export function useAnalysis(): UseAnalysisReturn {
       return null;
     }
 
+    // Validate environment variables
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      setError('App configuration error. Please reinstall the app.');
+      setErrorType('network_error');
+      return null;
+    }
+
     // Lock immediately
     inFlightRef.current = true;
+    abortRef.current?.abort();
+    abortRef.current = new AbortController();
+
+    // 2-minute fetch timeout — Gemini 2.5 Flash (thinking model) can take 30-90s
+    const fetchTimeoutId = setTimeout(() => abortRef.current?.abort(), 120000);
+
     setIsAnalyzing(true);
     setError(null);
     setErrorType(null);
-    setUsedFallback(false);
     setUsedSinglePhoto(false);
     setRateLimitWait(0);
     lastRequestRef.current = { photos, questionnaire };
 
-    // Save timestamp now (before request)
-    setLastAnalyzeAt(Date.now());
-
     try {
       const photoArray = [photos.front, photos.left, photos.right].filter(Boolean) as string[];
-      
+
       if (photoArray.length === 0) {
         setError('No photos to analyze');
         setErrorType('network_error');
@@ -213,71 +183,124 @@ export function useAnalysis(): UseAnalysisReturn {
         return null;
       }
 
-      // Compressing photos...
-
-      const compressedPhotos = await Promise.all(
+      // Compress photos
+      let compressedPhotos = await Promise.all(
         photoArray.map(photo => compressPhoto(photo, 640, 0.7))
       );
 
       let photosToSend = compressedPhotos;
-      const totalSize = compressedPhotos.reduce((sum, p) => sum + getDataUrlSize(p), 0);
+      let totalSize = compressedPhotos.reduce((sum, p) => sum + getDataUrlSize(p), 0);
 
-      // Total size calculated for payload check
+      // If still too large, try more aggressive compression
+      if (totalSize > MAX_PAYLOAD_SIZE) {
+        compressedPhotos = await Promise.all(
+          photoArray.map(photo => compressPhoto(photo, 480, 0.5))
+        );
+        totalSize = compressedPhotos.reduce((sum, p) => sum + getDataUrlSize(p), 0);
+        photosToSend = compressedPhotos;
+      }
 
+      // If still too large after aggressive compression, use single photo
       if (totalSize > MAX_PAYLOAD_SIZE) {
         photosToSend = [compressedPhotos[0]];
         setUsedSinglePhoto(true);
-        // Payload too large, using single photo
       }
 
-      // Call Supabase Edge Function (API key is stored server-side)
+      // Get user JWT if available, fall back to anon key
+      let authToken = SUPABASE_ANON_KEY;
       try {
-        const { data, error: fnError } = await supabase.functions.invoke('analyze_hairline', {
-          body: {
-            photos: photosToSend,
-            answers: questionnaire
-          }
-        });
-
-        // If there's any error, silently use fallback result (no error shown to user)
-        if (fnError || data?.error) {
-          setUsedFallback(true);
-          inFlightRef.current = false;
-          setIsAnalyzing(false);
-          return generateFallbackResult();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          authToken = session.access_token;
         }
+      } catch {
+        // Fall back to anon key
+      }
 
-        // The edge function returns the full AnalysisResult
-        const result: AnalysisResult = {
-          score: data.score,
-          confidence: data.confidence,
-          summary: data.summary,
-          observations: data.observations,
-          likely_patterns: data.likely_patterns,
-          general_options: data.general_options,
-          // Removed medical field
-          disclaimer: data.disclaimer,
-          hairline_type: data.hairline_type,
-          hairline_description: data.hairline_description,
-          personalized_tips: data.personalized_tips
-        };
+      // Call Supabase Edge Function directly via fetch for transparent error handling
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/analyze_hairline`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({
+            photos: photosToSend,
+            answers: questionnaire,
+          }),
+          signal: abortRef.current?.signal,
+        }
+      );
 
+      clearTimeout(fetchTimeoutId);
+      const data = await response.json();
+
+      if (!response.ok || data?.error) {
+        const errorMsg = data?.error || `Analysis failed (HTTP ${response.status})`;
+        setError(errorMsg);
+        setErrorType(response.status === 429 ? 'rate_limit' : 'server_error');
+        if (response.status === 429) {
+          setRateLimitWait(30);
+        }
         inFlightRef.current = false;
         setIsAnalyzing(false);
-        return result;
-
-      } catch (err) {
-        throw err;
+        return null;
       }
 
-    } catch (err) {
-      // Network or unexpected error - silently use fallback (no error shown)
-      setUsedFallback(true);
+      // Map the full AnalysisResult from edge function response
+      const result: AnalysisResult = {
+        score: data.score,
+        confidence: data.confidence,
+        summary: data.summary,
+        observations: data.observations || [],
+        disclaimer: data.disclaimer || "",
+        norwood_scale: data.norwood_scale ?? 2,
+        norwood_description: data.norwood_description ?? "",
+        detailed_observations: data.detailed_observations || [],
+        metrics: data.metrics || [],
+        risk_factors: data.risk_factors || [],
+        positive_signs: data.positive_signs || [],
+        hair_care_routine: data.hair_care_routine || [],
+        recommended_actions: data.recommended_actions || [],
+        should_see_dermatologist: data.should_see_dermatologist ?? false,
+        dermatologist_reason: data.dermatologist_reason ?? "",
+        photos_analyzed: data.photos_analyzed ?? photosToSend.length,
+        hairline_type: data.hairline_type,
+        hairline_description: data.hairline_description,
+        personalized_tips: data.personalized_tips,
+        follicular_analysis: data.follicular_analysis,
+        scalp_condition: data.scalp_condition,
+        age_comparison: data.age_comparison,
+        prognosis: data.prognosis,
+        lifestyle_impact: data.lifestyle_impact,
+      };
+
+      // Save cooldown timestamp only on success
+      setLastAnalyzeAt(Date.now());
+
       inFlightRef.current = false;
       setIsAnalyzing(false);
-      return generateFallbackResult();
+      return result;
+
+    } catch (err) {
+      clearTimeout(fetchTimeoutId);
+      // Don't set error state for intentional aborts (component unmounted)
+      if (err instanceof Error && err.name === 'AbortError') {
+        inFlightRef.current = false;
+        setIsAnalyzing(false);
+        return null;
+      }
+      const errorMsg = err instanceof Error ? err.message : 'An unexpected error occurred';
+      setError(errorMsg);
+      setErrorType('network_error');
+      inFlightRef.current = false;
+      setIsAnalyzing(false);
+      return null;
     }
-  }, [isAnalyzing]);
+  }, []);
 
   const retry = useCallback(async (): Promise<AnalysisResult | null> => {
     if (!lastRequestRef.current) {
@@ -296,7 +319,6 @@ export function useAnalysis(): UseAnalysisReturn {
     isAnalyzing,
     error,
     errorType,
-    usedFallback,
     usedSinglePhoto,
     cooldownRemaining,
     rateLimitWait,
