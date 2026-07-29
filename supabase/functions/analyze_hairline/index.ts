@@ -93,7 +93,16 @@ function sanitizeString(str: string, maxLen: number): string {
     .slice(0, maxLen);
 }
 
-const MODEL = "gemini-2.5-flash";
+// Model is overridable via the GEMINI_MODEL secret so a retirement can be handled
+// by changing a secret rather than redeploying.
+//
+// History: this was "gemini-2.5-flash" until 2026-07-29, when Google retired it for
+// new API keys ("no longer available to new users") — existing keys were grandfathered,
+// so it kept working until the key was rotated and then failed with a 404. The 2.0-flash
+// models are also unusable: they now return 429 with free-tier `limit: 0`.
+// Verified working on the free tier 2026-07-29: gemini-3.6-flash, gemini-3.5-flash,
+// gemini-3.1-flash-lite. Re-verify with a live call before changing this.
+const MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.6-flash";
 const GEMINI_ENDPOINT =
   `https://generativelanguage.googleapis.com/v1/models/${MODEL}:generateContent`;
 

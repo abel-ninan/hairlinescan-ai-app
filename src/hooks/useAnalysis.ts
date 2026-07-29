@@ -162,7 +162,8 @@ export function useAnalysis(): UseAnalysisReturn {
     abortRef.current?.abort();
     abortRef.current = new AbortController();
 
-    // 2-minute fetch timeout — Gemini 2.5 Flash (thinking model) can take 30-90s
+    // 2-minute fetch timeout — the analysis model can take 30-90s.
+    // Measured 2026-07-29 on gemini-3.6-flash: ~30s for a 3-photo scan, ~44s for 1 photo.
     const fetchTimeoutId = setTimeout(() => abortRef.current?.abort(), 120000);
 
     setIsAnalyzing(true);
