@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import FBSDKCoreKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -8,6 +9,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
+
+        // Meta SDK — powers SKAdNetwork install attribution for the ad campaigns.
+        // Requires FacebookAppID + FacebookClientToken in Info.plist; the SDK raises
+        // an exception at launch if the client token is missing or still a placeholder.
+        ApplicationDelegate.shared.application(
+            application,
+            didFinishLaunchingWithOptions: launchOptions
+        )
+
         return true
     }
 

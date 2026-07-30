@@ -18,6 +18,12 @@ end
 target 'App' do
   capacitor_pods
   # Add your Pods here
+
+  # Meta SDK — required for SKAdNetwork install attribution. Without it, Meta
+  # silently restricts app-install ad sets to iOS <= 14.4 devices.
+  # FBSDKCoreKit alone is enough: it carries app events + SKAdNetwork support.
+  # LoginKit/ShareKit are deliberately NOT included (no FB login or sharing here).
+  pod 'FBSDKCoreKit'
 end
 
 post_install do |installer|

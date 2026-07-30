@@ -5,6 +5,12 @@ PODS:
     - Capacitor
     - SDWebImage
   - CapacitorCordova (6.2.1)
+  - FBAEMKit (18.1.0):
+    - FBSDKCoreKit_Basics (= 18.1.0)
+  - FBSDKCoreKit (18.1.0):
+    - FBAEMKit (= 18.1.0)
+    - FBSDKCoreKit_Basics (= 18.1.0)
+  - FBSDKCoreKit_Basics (18.1.0)
   - PurchasesHybridCommon (13.26.0):
     - RevenueCat (= 5.20.0)
   - RevenueCat (5.20.0)
@@ -19,10 +25,14 @@ DEPENDENCIES:
   - "Capacitor (from `../../node_modules/@capacitor/ios`)"
   - "CapacitorCommunityMedia (from `../../node_modules/@capacitor-community/media`)"
   - "CapacitorCordova (from `../../node_modules/@capacitor/ios`)"
+  - FBSDKCoreKit
   - "RevenuecatPurchasesCapacitor (from `../../node_modules/@revenuecat/purchases-capacitor`)"
 
 SPEC REPOS:
   trunk:
+    - FBAEMKit
+    - FBSDKCoreKit
+    - FBSDKCoreKit_Basics
     - PurchasesHybridCommon
     - RevenueCat
     - SDWebImage
@@ -41,11 +51,14 @@ SPEC CHECKSUMS:
   Capacitor: c95400d761e376be9da6be5a05f226c0e865cebf
   CapacitorCommunityMedia: 7ed0fb7688872e482fc78d286a3ef9ba94035c71
   CapacitorCordova: 8d93e14982f440181be7304aa9559ca631d77fff
+  FBAEMKit: 64088ff0380f50e4a56e2ee07d984f7f1aef7595
+  FBSDKCoreKit: 8390ea3a8fac186f444275f31d7512e760b47cba
+  FBSDKCoreKit_Basics: 3a0005c78b355388bf2df5c6dbe6381b77ea4be3
   PurchasesHybridCommon: fa166fc8b385cf80f581f923c91d8ccffe5dd7f8
   RevenueCat: e47ff90dfd271fde155a4befe48e8fc02e8281e4
   RevenuecatPurchasesCapacitor: 6727a4dc1455bdf2374259420719ce5dfbe957fa
   SDWebImage: 1bb6a1b84b6fe87b972a102bdc77dd589df33477
 
-PODFILE CHECKSUM: 992079eaf9d1b2d5d6ea4827f205af15db1cf3e3
+PODFILE CHECKSUM: b2f87177bbbc45eacb5a23cff73d274080b2e1ef
 
 COCOAPODS: 1.16.2
