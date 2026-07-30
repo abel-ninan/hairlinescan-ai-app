@@ -13,6 +13,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Meta SDK — powers SKAdNetwork install attribution for the ad campaigns.
         // Requires FacebookAppID + FacebookClientToken in Info.plist; the SDK raises
         // an exception at launch if the client token is missing or still a placeholder.
+        //
+        // This app deliberately does NOT show an App Tracking Transparency prompt, so
+        // the device never grants tracking permission. Meta's guidance is to set this
+        // to false in exactly that case; events are then measured in aggregate via
+        // SKAdNetwork, which is what lifts the iOS <= 14.4 delivery cap. Leaving it at
+        // the default would also put the app's behavior at odds with its App Privacy
+        // declaration — declaring tracking without an ATT prompt is a rejection trigger.
+        Settings.shared.isAdvertiserTrackingEnabled = false
+
         ApplicationDelegate.shared.application(
             application,
             didFinishLaunchingWithOptions: launchOptions
