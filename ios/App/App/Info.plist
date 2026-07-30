@@ -25,7 +25,7 @@
 	<key>FacebookAutoLogAppEventsEnabled</key>
 	<true/>
 	<key>FacebookClientToken</key>
-	<string>REPLACE_WITH_META_CLIENT_TOKEN</string>
+	<string>a6211fc41eebd888a11e25d08efe248b</string>
 	<key>FacebookDisplayName</key>
 	<string>HairMaxx</string>
 	<key>ITSAppUsesNonExemptEncryption</key>

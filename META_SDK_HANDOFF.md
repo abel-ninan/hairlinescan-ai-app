@@ -221,13 +221,19 @@ ref. No URL change, therefore no code change, therefore **no build was needed fo
 That means this SDK work carries its own build and its own review cycle — schedule it on its
 own merits, not as a rider on something else.
 
-⚠️ **Still broken, and not your problem here:** scans return HTTP 500 because the Gemini API
-key is invalid. Tracked in `[[hairmaxx-backend-supabase-pause]]`. **The app is not usable by
-downloaders until that key is fixed**, regardless of anything in this document.
+✅ ~~**Still broken:** scans return HTTP 500 because the Gemini API key is invalid.~~
+**RESOLVED 2026-07-29.** The diagnosis in that line was wrong: the key was fine, the
+**model** was retired. Google withdrew `gemini-2.5-flash` from new API keys (the original
+key was grandfathered, so it kept working until rotation), and the `gemini-2.0-*` models
+have free-tier `limit: 0`. Fixed by switching to `gemini-3.6-flash` (commit `7c06a09`),
+verified end-to-end: HTTP 200, all 24 response fields, ~30s for a 3-photo scan. **No billing
+account was needed** and no app build was required — the fix was entirely server-side, so
+existing downloaders were repaired without an update.
 
-⚠️ **Recurring risk worth fixing properly:** free-tier Supabase auto-pauses after ~1 week of
-inactivity, and it has now happened twice (2026-05-15, 2026-07-29). Each pause is a silent
-total outage of a live App Store app. A paid tier or a keepalive ping is the real fix.
+✅ ~~**Recurring risk:** free-tier Supabase auto-pauses after ~1 week of inactivity~~
+**MITIGATED 2026-07-29.** A keep-alive LaunchAgent (`com.abe.hairmaxx.keepalive`, every
+2 days) now pings the project and auto-restores it if it ever finds it paused. Note it only
+runs while this Mac is on; a paid tier is still the fully reliable fix.
 
 ---
 
