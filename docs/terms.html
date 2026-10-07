@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
     <title>Terms of Service - HairMaxx</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -22,6 +23,21 @@
         .updated { color: #666; font-size: 14px; margin-bottom: 30px; }
         .section { background: #fff; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         .warning { background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+
+        /* Dark mode: the app shows these pages inside its dark interface. */
+        @media (prefers-color-scheme: dark) {
+            body { background: #0d1016; color: #c3c9d3; }
+            h1, h2, h3, strong { color: #f3f5f8; }
+            .updated { color: #8b93a1; }
+            .section, .card { background: #151922 !important; box-shadow: none; border: 1px solid rgba(255,255,255,0.07) !important; }
+            .section[style*="#fff3cd"], .card[style*="#fff3cd"], .warning {
+                background: rgba(245, 158, 11, 0.10) !important;
+                border: 1px solid rgba(245, 158, 11, 0.45) !important;
+            }
+            p[style*="#e8f4fd"] { background: rgba(59, 130, 246, 0.12) !important; }
+            p[style*="color: #666"] { color: #8b93a1 !important; }
+            a { color: #5b9cf8; }
+        }
     </style>
 </head>
 <body>
@@ -79,7 +95,7 @@
 
     <div class="section">
         <h2>5. In-App Purchases</h2>
-        <p>Each AI scan is a one-time $4.99 in-app purchase through the App Store. By purchasing a scan, you agree that:</p>
+        <p>Each AI scan is a one-time in-app purchase through the App Store, at the price shown before you buy. By purchasing a scan, you agree that:</p>
         <ul>
             <li>Payment will be charged to your Apple ID account at confirmation of purchase</li>
             <li>This is a one-time purchase for a single scan &mdash; there is no subscription and no auto-renewal</li>

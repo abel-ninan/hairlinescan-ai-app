@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
     <title>Support - HairMaxx</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -40,6 +41,21 @@
         .contact-btn:hover { background: #16a34a; text-decoration: none; }
         .faq-item { margin-bottom: 20px; }
         .faq-q { font-weight: 600; margin-bottom: 8px; }
+
+        /* Dark mode: the app shows these pages inside its dark interface. */
+        @media (prefers-color-scheme: dark) {
+            body { background: #0d1016; color: #c3c9d3; }
+            h1, h2, h3, strong { color: #f3f5f8; }
+            .updated { color: #8b93a1; }
+            .section, .card { background: #151922 !important; box-shadow: none; border: 1px solid rgba(255,255,255,0.07) !important; }
+            .section[style*="#fff3cd"], .card[style*="#fff3cd"], .warning {
+                background: rgba(245, 158, 11, 0.10) !important;
+                border: 1px solid rgba(245, 158, 11, 0.45) !important;
+            }
+            p[style*="#e8f4fd"] { background: rgba(59, 130, 246, 0.12) !important; }
+            p[style*="color: #666"] { color: #8b93a1 !important; }
+            a { color: #5b9cf8; }
+        }
     </style>
 </head>
 <body>
@@ -59,7 +75,7 @@
 
         <div class="faq-item">
             <p class="faq-q">How does HairMaxx work?</p>
-            <p>HairMaxx uses AI to analyze photos of your hairline and provide fun, entertaining style insights. Simply take photos and receive instant results for entertainment.</p>
+            <p>HairMaxx uses AI to analyze photos of your hairline and provide fun, entertaining style insights. Take three quick photos and get your results in about a minute after a one-time in-app purchase.</p>
         </div>
 
         <div class="faq-item">
@@ -69,7 +85,7 @@
 
         <div class="faq-item">
             <p class="faq-q">Are my photos stored?</p>
-            <p>Your photos are processed temporarily for analysis and are not permanently stored on our servers. See our <a href="privacy-policy.html">Privacy Policy</a> for details.</p>
+            <p>Your photos aren't kept on our servers. Each scan's results and photos, and any answers you give, stay on your phone until you delete them with Clear All Data in Settings. See our <a href="privacy-policy.html">Privacy Policy</a> for details.</p>
         </div>
 
         <div class="faq-item">
@@ -91,7 +107,6 @@
 
     <div class="card">
         <h2>App Information</h2>
-        <p><strong>Version:</strong> 1.3.3</p>
         <p><strong>Developer:</strong> HairMaxx</p>
         <p><a href="privacy-policy.html">Privacy Policy</a> · <a href="terms.html">Terms of Service</a></p>
     </div>
